@@ -5,8 +5,14 @@ venv/
 .env
 .ipynb_checkpoints/
 data/raw/*
+data/bronze/*
+data/silver/*
+data/gold/*
 data/processed/*
 !data/raw/.gitkeep
+!data/bronze/.gitkeep
+!data/silver/.gitkeep
+!data/gold/.gitkeep
 !data/processed/.gitkeep
 *.pkl
 *.joblib

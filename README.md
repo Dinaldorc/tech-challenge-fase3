@@ -64,26 +64,45 @@ localmente em pandas puro**, replicando a mesma lógica de negócio dos
 notebooks originais (bronze → silver → gold), a partir dos microdados
 públicos do INEP.
 
+**Escopo temporal: 2023, 2024 e 2025** (mesmo escopo da base original na AWS — confirmado por comparação direta com um export da camada Gold da Fase 2, ver seção "Validação" abaixo).
+
 **Fonte dos dados (INEP, download direto):**
-- Microdados: https://download.inep.gov.br/dados_abertos/microdados_avaliacao_da_alfabetizacao_2024.zip
-- Metas Brasil/UF: https://download.inep.gov.br/alfabetiza_brasil/resultados_e_metas_ufs_2024_2.xlsx
-- Metas Município: https://download.inep.gov.br/alfabetiza_brasil/resultados_e_metas_municipios_2024.xlsx
+- Microdados 2023: https://download.inep.gov.br/dados_abertos/microdados_avaliacao_da_alfabetizacao_2023.zip
+- Microdados 2024: https://download.inep.gov.br/dados_abertos/microdados_avaliacao_da_alfabetizacao_2024.zip
+- Microdados 2025: https://download.inep.gov.br/dados_abertos/microdados_AEEB_2025.zip
+- Metas/resultados Brasil e UF (histórico 2023-2025 em um único arquivo): https://download.inep.gov.br/avaliacao_da_alfabetizacao/resultados/resultados_e_metas_ufs_2025_v1.xlsx
+- Metas/resultados Município (histórico 2023-2025 em um único arquivo): https://download.inep.gov.br/avaliacao_da_alfabetizacao/resultados/resultados_e_metas_municipios_2025_v2.xlsx
 
 **Como rodar a reconstrução:**
 
-1. Baixe os 3 arquivos acima e organize em `data/raw/`:
+1. Baixe os 5 arquivos acima e organize em `data/raw/`:
    ```
-   data/raw/DADOS/TS_ALUNO.csv        (dentro do zip de microdados)
-   data/raw/DADOS/TS_MUNICIPIO.csv    (dentro do zip de microdados)
-   data/raw/DADOS/TS_ESTADO.csv       (dentro do zip de microdados)
-   data/raw/resultados_e_metas_ufs_2024_2.xlsx
-   data/raw/resultados_e_metas_municipios_2024.xlsx
+   data/raw/DADOS/2023/TS_ALUNO.csv        (dentro do zip de microdados 2023)
+   data/raw/DADOS/2023/TS_MUNICIPIO.csv
+   data/raw/DADOS/2023/TS_ESTADO.csv
+   data/raw/DADOS/2024/TS_ALUNO.csv        (dentro do zip de microdados 2024)
+   data/raw/DADOS/2024/TS_MUNICIPIO.csv
+   data/raw/DADOS/2024/TS_ESTADO.csv
+   data/raw/DADOS/2025/TS_ALUNO.csv        (dentro do zip de microdados 2025)
+   data/raw/DADOS/2025/TS_MUNICIPIO.csv
+   data/raw/DADOS/2025/TS_ESTADO.csv
+   data/raw/resultados_e_metas_ufs_2025_v1.xlsx
+   data/raw/resultados_e_metas_municipios_2025_v2.xlsx
    ```
-2. Instale as dependências (`pip install -r requirements.txt` — inclui `pyarrow`, necessário para salvar as tabelas em Parquet).
+2. Instale as dependências (`pip install -r requirements.txt` — inclui `pyarrow`, necessário para salvar as tabelas em Parquet; sem ele a pipeline usa CSV como fallback, bem mais lento/pesado em memória para a `FT_MACHINE_LEARNING`, que tem ~6 milhões de linhas nos 3 anos).
 3. Rode a pipeline completa:
    ```bash
    python -m src.preprocessing.run_pipeline
    ```
+   A etapa de `TS_ALUNO` (bronze + silver + `FT_MACHINE_LEARNING`) processa ~6 milhões de linhas — pode levar alguns minutos e exige uma máquina com pelo menos 4-8 GB de RAM livres se estiver sem `pyarrow`.
+
+### Validação contra a base original da AWS
+
+Um integrante do grupo exportou parte da camada Gold real (S3 da Fase 2) e comparamos linha a linha com esta reconstrução, nos 3 anos:
+
+- `FT_INDICADOR_MUNICIPIO`, `FT_INDICADOR_MUNICIPIO_META_VS_RESULTADO` e `ANALISE_NIVEIS_MUNICIPIO`: contagem de linhas idêntica (19.700 / 16.396 / 16.396) e mais de 99% de correspondência exata nos indicadores numéricos e categóricos, nos 3 anos.
+- **Bug real encontrado na `FT_MACHINE_LEARNING` original**: o notebook `gd_machine_learning.ipynb` do repositório da Fase 2 tem um filtro `.filter(col('CO_MUNICIPIO').isNull())` que mantém só os poucos alunos com dados cadastrais incompletos (628 registros de 2025, todos preliminares), em vez da base completa de alunos (~6 milhões nos 3 anos). Vale reportar ao grupo — a tabela publicada na AWS hoje não é utilizável para treinar modelo.
+- Duas pequenas correções feitas durante a validação: (1) o valor da meta nacional 2024 usado por nós vem exato do INEP (59,9%) contra um arredondamento de 60% usado na base original — decisão consciente de manter o valor exato; (2) `DISTANCIA_META_2030` foi corrigida para seguir a mesma convenção (resultado − meta) das demais colunas `DIF_META_*`, e passou a assumir 80% como meta padrão quando a planilha do INEP não traz um valor explícito para 2030 (municípios que já superaram a meta).
 
 Isso gera, em `data/bronze/`, `data/silver/` e `data/gold/`, as mesmas 4
 tabelas Gold do projeto original:

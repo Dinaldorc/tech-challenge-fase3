@@ -17,31 +17,40 @@ def _stamp(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+_TS_ALUNO_COLS = [
+    "NU_ANO_AVALIACAO", "CO_UF", "SG_UF", "ID_ALUNO", "TP_SERIE", "ID_ESCOLA",
+    "TP_DEPENDENCIA", "CO_MUNICIPIO", "NO_MUNICIPIO", "IN_PRESENCA_LP",
+    "IN_PREENCHIMENTO_LP", "VL_PESO_ALUNO_LP", "VL_PROFICIENCIA_LP", "IN_ALFABETIZADO",
+]
+
+
 def build_ts_aluno() -> pd.DataFrame:
-    df = c.read_raw_csv("TS_ALUNO.csv")
+    df = c.read_raw_csv_all_years("TS_ALUNO.csv", usecols=_TS_ALUNO_COLS)
     df["NU_ANO_AVALIACAO"] = df["NU_ANO_AVALIACAO"].astype(int)
     df["CO_UF"] = df["CO_UF"].astype(int)
     df["ID_ALUNO"] = df["ID_ALUNO"].astype("int64")
-    df["ID_ESCOLA"] = df["ID_ESCOLA"].astype("int64")
+    # Nullable (Int64) porque a base de 2025 tem 628 registros preliminares
+    # sem ID_ESCOLA/TP_DEPENDENCIA/CO_MUNICIPIO preenchidos (ver README).
+    df["ID_ESCOLA"] = df["ID_ESCOLA"].astype("Int64")
     df["TP_SERIE"] = df["TP_SERIE"].astype(int)
-    df["TP_DEPENDENCIA"] = df["TP_DEPENDENCIA"].astype(int)
-    df["CO_MUNICIPIO"] = df["CO_MUNICIPIO"].astype(int)
+    df["TP_DEPENDENCIA"] = df["TP_DEPENDENCIA"].astype("Int64")
+    df["CO_MUNICIPIO"] = df["CO_MUNICIPIO"].astype("Int64")
     df["IN_PRESENCA_LP"] = pd.to_numeric(df["IN_PRESENCA_LP"], errors="coerce").astype("Int64")
     df["IN_PREENCHIMENTO_LP"] = pd.to_numeric(df["IN_PREENCHIMENTO_LP"], errors="coerce").astype("Int64")
     df["IN_ALFABETIZADO"] = pd.to_numeric(df["IN_ALFABETIZADO"], errors="coerce").astype("Int64")
     df["VL_PESO_ALUNO_LP"] = pd.to_numeric(df["VL_PESO_ALUNO_LP"], errors="coerce")
     df["VL_PROFICIENCIA_LP"] = pd.to_numeric(df["VL_PROFICIENCIA_LP"], errors="coerce")
-    df["NO_MUNICIPIO"] = df["NO_MUNICIPIO"].str.strip().str.title()
-    df["SG_UF"] = df["SG_UF"].str.strip().str.upper()
+    df["NO_MUNICIPIO"] = df["NO_MUNICIPIO"].str.strip().str.title().astype("category")
+    df["SG_UF"] = df["SG_UF"].str.strip().str.upper().astype("category")
 
-    df["SK_ALUNO"] = c.sha256_key(df, ["NU_ANO_AVALIACAO", "ID_ALUNO"])
+    df["SK_ALUNO"] = c.surrogate_key(df, ["NU_ANO_AVALIACAO", "ID_ALUNO"])
     df = _stamp(df)
     c.write_table(df, c.BRONZE_PATH, c.TS_ALUNO)
     return df
 
 
 def build_ts_municipio() -> pd.DataFrame:
-    df = c.read_raw_csv("TS_MUNICIPIO.csv")
+    df = c.read_raw_csv_all_years("TS_MUNICIPIO.csv")
     df["NU_ANO_AVALIACAO"] = df["NU_ANO_AVALIACAO"].astype(int)
     df["CO_UF"] = df["CO_UF"].astype(int)
     df["CO_MUNICIPIO"] = df["CO_MUNICIPIO"].astype(int)
@@ -61,7 +70,7 @@ def build_ts_municipio() -> pd.DataFrame:
 
 
 def build_ts_estado() -> pd.DataFrame:
-    df = c.read_raw_csv("TS_ESTADO.csv")
+    df = c.read_raw_csv_all_years("TS_ESTADO.csv")
     df["NU_ANO_AVALIACAO"] = df["NU_ANO_AVALIACAO"].astype(int)
     df["CO_UF"] = df["CO_UF"].astype(int)
     df["TP_SERIE"] = df["TP_SERIE"].astype(int)
@@ -87,14 +96,18 @@ def _clean_meta_value(series: pd.Series) -> pd.Series:
 
 
 def build_metas() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    uf_raw = pd.read_excel(c.RAW_PATH / "resultados_e_metas_ufs_2024_2.xlsx", sheet_name=0, header=1)
-    mun_raw = pd.read_excel(c.RAW_PATH / "resultados_e_metas_municipios_2024.xlsx", sheet_name=0, header=1)
+    uf_raw = pd.read_excel(c.RAW_PATH / "resultados_e_metas_ufs_2025_v1.xlsx", sheet_name=0, header=1)
+    mun_raw = pd.read_excel(c.RAW_PATH / "resultados_e_metas_municipios_2025_v2.xlsx", sheet_name=0, header=1)
+    # As planilhas do INEP têm linhas de rodapé/observações soltas no final
+    # (ANO/NOME_UF/CO_MUNICIPIO vazios) -- descarta antes de processar.
+    uf_raw = uf_raw[uf_raw["NOME_UF"].notna()].copy()
+    mun_raw = mun_raw[mun_raw["CO_MUNICIPIO"].notna()].copy()
 
     meta_cols = [f"META_FINAL_{y}" for y in range(2024, 2031)]
 
     # --- METAS_BR (linha "Brasil" dentro do arquivo de UFs) ---------------
     br = uf_raw[uf_raw["NOME_UF"] == "Brasil"].copy()
-    for col in meta_cols + ["PC_ALUNO_ALFABETIZADO_2023", "PC_ALUNO_ALFABETIZADO_2024", "PC_AVALIADOS_LP"]:
+    for col in meta_cols + ["PC_ALUNO_ALFABETIZADO_2023", "PC_ALUNO_ALFABETIZADO_2024", "PC_ALUNO_ALFABETIZADO_2025", "PC_AVALIADOS_LP"]:
         br[col] = _clean_meta_value(br[col])
     br["REDE"] = br["REDE"].str.strip().str.title()
     br["ANO_REFERENCIA"] = br["ANO"].astype(int)
@@ -106,7 +119,7 @@ def build_metas() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
     # --- METAS_UF (demais linhas do arquivo de UFs) ------------------------
     uf = uf_raw[uf_raw["NOME_UF"] != "Brasil"].copy()
-    for col in meta_cols + ["PC_ALUNO_ALFABETIZADO_2023", "PC_ALUNO_ALFABETIZADO_2024", "PC_AVALIADOS_LP"]:
+    for col in meta_cols + ["PC_ALUNO_ALFABETIZADO_2023", "PC_ALUNO_ALFABETIZADO_2024", "PC_ALUNO_ALFABETIZADO_2025", "PC_AVALIADOS_LP"]:
         uf[col] = _clean_meta_value(uf[col])
     uf["SIGLA_UF"] = uf["SIGLA_UF"].str.strip().str.upper()
     uf["CO_UF"] = uf["CD_UF"].astype(int)
@@ -120,7 +133,7 @@ def build_metas() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
 
     # --- METAS_MUNICIPIO -----------------------------------------------------
     mun = mun_raw.copy()
-    for col in meta_cols + ["PC_ALUNO_ALFABETIZADO_2023", "PC_ALUNO_ALFABETIZADO_2024", "PC_AVALIADOS_LP"]:
+    for col in meta_cols + ["PC_ALUNO_ALFABETIZADO_2023", "PC_ALUNO_ALFABETIZADO_2024", "PC_ALUNO_ALFABETIZADO_2025", "PC_AVALIADOS_LP"]:
         mun[col] = _clean_meta_value(mun[col])
     mun["CO_UF"] = mun["CO_UF"].astype(int)
     mun["SG_UF"] = mun["SG_UF"].str.strip().str.upper()

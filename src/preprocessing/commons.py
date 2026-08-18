@@ -33,6 +33,10 @@ ANALISE_NIVEIS_MUNICIPIO = "ANALISE_NIVEIS_MUNICIPIO"
 
 CSV_OPTIONS = dict(sep=";", encoding="ISO-8859-1", low_memory=False)
 
+# Anos de avaliação cobertos pela reconstrução (mesmo escopo do projeto original
+# na AWS/Databricks da Fase 2: 2023, 2024 e 2025).
+YEARS = [2023, 2024, 2025]
+
 # ---------------------------------------------------------------------------
 # Mapas de negócio (equivalente a commons_imports.ipynb)
 # ---------------------------------------------------------------------------
@@ -60,7 +64,13 @@ TIPO_REDE_MAP = {0: "Total", 2: "Estadual", 3: "Municipal", 4: "Privada", 5: "To
 # Chave técnica (equivalente a sha2(concat_ws("|", cols), 256))
 # ---------------------------------------------------------------------------
 def sha256_key(df: pd.DataFrame, cols: list[str]) -> pd.Series:
-    concat = df[cols].astype(str).agg("|".join, axis=1)
+    # Concatenação vetorizada (Series + Series) em vez de .agg("|".join, axis=1),
+    # que é ordens de magnitude mais lenta/mais pesada em memória para milhões
+    # de linhas (invoca uma função Python por linha via apply interno do pandas).
+    parts = [df[col].astype(str) for col in cols]
+    concat = parts[0]
+    for p in parts[1:]:
+        concat = concat + "|" + p
     return concat.apply(lambda x: hashlib.sha256(x.encode("utf-8")).hexdigest())
 
 
@@ -69,6 +79,30 @@ def sha256_key(df: pd.DataFrame, cols: list[str]) -> pd.Series:
 # ---------------------------------------------------------------------------
 def read_raw_csv(filename: str) -> pd.DataFrame:
     return pd.read_csv(RAW_PATH / "DADOS" / filename, **CSV_OPTIONS)
+
+
+def read_raw_csv_all_years(filename: str, usecols: list[str] | None = None) -> pd.DataFrame:
+    """Lê o mesmo arquivo (ex: TS_ALUNO.csv) em data/raw/DADOS/{ano}/ para
+    cada ano em YEARS e concatena, replicando o `recursive_by_year=True`
+    do commons/readers.ipynb original.
+
+    `usecols`, quando informado, evita carregar colunas que não usamos
+    (ex: respostas brutas item a item de TS_ALUNO, presentes só em alguns
+    anos) — reduz bastante o pico de memória para TS_ALUNO (~6M linhas)."""
+    frames = []
+    for year in YEARS:
+        path = RAW_PATH / "DADOS" / str(year) / filename
+        if not path.exists():
+            continue
+        cols = None
+        if usecols is not None:
+            header = pd.read_csv(path, nrows=0, **CSV_OPTIONS).columns
+            cols = [c for c in usecols if c in header]
+        df = pd.read_csv(path, usecols=cols, **CSV_OPTIONS)
+        frames.append(df)
+    if not frames:
+        raise FileNotFoundError(f"Nenhum arquivo {filename} encontrado em data/raw/DADOS/<ano>/")
+    return pd.concat(frames, ignore_index=True)
 
 
 def _has_parquet_engine() -> bool:
@@ -84,6 +118,19 @@ def _has_parquet_engine() -> bool:
 
 
 _PARQUET_OK = _has_parquet_engine()
+
+
+def surrogate_key(df: pd.DataFrame, cols: list[str]) -> pd.Series:
+    """Chave técnica leve (concatenação vetorizada, sem hash criptográfico).
+    Usada em tabelas muito grandes (TS_ALUNO, milhões de linhas) onde gerar
+    um SHA-256 por linha é caro demais em tempo/memória sem ganho real,
+    já que aqui não fazemos MERGE incremental como no Delta Lake original —
+    a unicidade da concatenação já basta."""
+    parts = [df[col].astype(str) for col in cols]
+    concat = parts[0]
+    for p in parts[1:]:
+        concat = concat + "|" + p
+    return concat
 
 
 def write_table(df: pd.DataFrame, layer_path: Path, table_name: str) -> Path:

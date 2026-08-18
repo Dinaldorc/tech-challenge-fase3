@@ -33,7 +33,7 @@ def build_ts_aluno_silver() -> pd.DataFrame:
     df["DS_SITUACAO_AVALIACAO"] = np.where(df["VL_PROFICIENCIA_LP"].notna(), "Avaliado", "Não Avaliado")
 
     df["CO_MUNICIPIO_IBGE"] = df["CO_MUNICIPIO"].astype(str).str.zfill(7)
-    df["NO_MUNICIPIO_UF"] = df["NO_MUNICIPIO"] + " - " + df["SG_UF"]
+    df["NO_MUNICIPIO_UF"] = df["NO_MUNICIPIO"].astype(str) + " - " + df["SG_UF"].astype(str)
     df["DS_DEPENDENCIA"] = df["TP_DEPENDENCIA"].map(c.DEPENDENCIA_MAP)
     df["DS_SERIE"] = df["TP_SERIE"].map({2: "2º Ano do Ensino Fundamental"}).fillna(df["TP_SERIE"].astype(str))
     df["DS_ALFABETIZADO"] = df["IN_ALFABETIZADO"].map({1: "Sim", 0: "Não"})
@@ -67,7 +67,7 @@ def _add_faixa_municipio_estado(df: pd.DataFrame) -> pd.DataFrame:
 def build_ts_municipio_silver() -> pd.DataFrame:
     df = c.read_table(c.BRONZE_PATH, c.TS_MUNICIPIO).copy()
     df = _add_faixa_municipio_estado(df)
-    df["NO_MUNICIPIO_UF"] = df["NO_MUNICIPIO"] + " - " + df["SG_UF"]
+    df["NO_MUNICIPIO_UF"] = df["NO_MUNICIPIO"].astype(str) + " - " + df["SG_UF"].astype(str)
     df = _add_ano_carga(df)
 
     c.validate_primary_key(df, "SK_MUNICIPIO")

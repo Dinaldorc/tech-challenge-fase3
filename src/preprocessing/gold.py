@@ -175,8 +175,13 @@ def build_metas_municipio_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
         (df["PC_ALUNO_ALFABETIZADO"] - LIMIAR_PADRAO).round(2),
     )
     df["IN_META_ATINGIDA"] = (df["DIF_META_ALFABETIZACAO"] >= 0).astype(int)
-    df["DISTANCIA_META_2030"] = (df["META_FINAL_2030"] - df["PC_ALUNO_ALFABETIZADO"]).round(2)
-    df["IN_META_2030_ATINGIDA"] = (df["DISTANCIA_META_2030"] <= 0).astype(int)
+    # Meta 2030 do Compromisso Nacional é universal (80%): quando a planilha do
+    # INEP não traz um valor explícito para o município (geralmente porque ele
+    # já superou 80% e não há trajetória de meta calculada), assume-se 80.
+    META_2030_PADRAO = 80.0
+    meta_2030 = df["META_FINAL_2030"].fillna(META_2030_PADRAO)
+    df["DISTANCIA_META_2030"] = (df["PC_ALUNO_ALFABETIZADO"] - meta_2030).round(2)
+    df["IN_META_2030_ATINGIDA"] = (df["DISTANCIA_META_2030"] >= 0).astype(int)
 
     ft_meta_vs_resultado = df.copy()
     c.write_table(ft_meta_vs_resultado, c.GOLD_PATH, c.FT_INDICADOR_MUNICIPIO_META_VS_RESULTADO)

@@ -16,10 +16,6 @@ data/processed/*
 !data/processed/.gitkeep
 
 # Microdados brutos do Censo Escolar (INEP) - muito grandes para versionar
-data/microdados_censo_escolar_2025/dados/*
-data/microdados_censo_escolar_2025/Anexos/*
-data/microdados_censo_escolar_2025/leia-me/*
-!data/microdados_censo_escolar_2025/dados/.gitkeep
 *.pkl
 *.joblib
 .DS_Store

@@ -18,6 +18,7 @@ from . import split as sp
 
 REPORT_PATH = c.BASE_DIR / "reports" / "baseline_comparison.csv"
 REGIAO_REPORT_PATH = c.BASE_DIR / "reports" / "baseline_metricas_por_regiao.csv"
+UF_REPORT_PATH = c.BASE_DIR / "reports" / "baseline_metricas_por_uf.csv"
 
 CLASSIFICADORES = {
     "LogisticRegression": lambda: LogisticRegression(max_iter=1000),
@@ -58,17 +59,24 @@ def run() -> pd.DataFrame:
     resultado_df[cols_resumo].to_csv(REPORT_PATH, index=False)
     print(f"\nResumo salvo em {REPORT_PATH}")
 
-    # Melhor cenario (maior ROC-AUC) -- quebra por regiao pra checar se o
-    # modelo reproduz/agrava o gap de ~15pp achado na EDA (Secao 5).
+    # Melhor cenario (maior ROC-AUC) -- quebra por regiao E por UF pra
+    # checar se o modelo reproduz/agrava a disparidade achada na EDA
+    # (Secao 5, revisada: ~13pp por regiao, mas 47pp por UF -- CE x RN).
     melhor_chave = resultado_df.loc[resultado_df["roc_auc"].idxmax(), ["modelo", "enriquecimento_socioeconomico"]]
     melhor = (melhor_chave["modelo"], bool(melhor_chave["enriquecimento_socioeconomico"]))
     model, X_test, y_test = modelos_ajustados[melhor]
 
     print(f"\nMelhor cenario ({melhor[0]}, socioeconomico={melhor[1]}) -- metricas por regiao:")
-    regiao_df = ev.evaluate_by_region(model, X_test, y_test)
+    regiao_df = ev.evaluate_by_group(model, X_test, y_test, "REGIAO")
     print(regiao_df.to_string(index=False))
     regiao_df.to_csv(REGIAO_REPORT_PATH, index=False)
-    print(f"\nQuebra por regiao salva em {REGIAO_REPORT_PATH}")
+    print(f"Quebra por regiao salva em {REGIAO_REPORT_PATH}")
+
+    print(f"\nMelhor cenario ({melhor[0]}, socioeconomico={melhor[1]}) -- metricas por UF:")
+    uf_df = ev.evaluate_by_group(model, X_test, y_test, "SG_UF")
+    print(uf_df.to_string(index=False))
+    uf_df.to_csv(UF_REPORT_PATH, index=False)
+    print(f"Quebra por UF salva em {UF_REPORT_PATH}")
 
     return resultado_df
 

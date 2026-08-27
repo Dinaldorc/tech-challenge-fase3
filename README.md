@@ -77,6 +77,15 @@ O recall varia de 11,6% a 82,9% — uma disparidade desproporcional à
 diferença real na taxa de alfabetização (~15pp). Ver "Interpretação dos
 resultados" e "Limitações do projeto".
 
+**Quebra por UF** (mesmo modelo, `reports/baseline_metricas_por_uf.csv`) é
+bem mais grave: em **12 das 27 UFs (44%)**, o recall é degenerado —
+**exatamente 0%** em RN, SE, RR, BA, AP e DF (o modelo nunca prevê
+"alfabetizado" nessas UFs) e **≥99%** em PE, MG, PR, GO, ES e CE (o modelo
+quase sempre prevê "alfabetizado"). Isso indica que, pra quase metade dos
+estados, o RandomForest não aprendeu um padrão individual de fato — ele
+reproduz a taxa histórica média daquele estado como se fosse a previsão
+pra todo aluno dali. Ver "Interpretação dos resultados".
+
 ## Interpretação dos resultados
 
 SHAP (`TreeExplainer`, amostra de 20 mil linhas do teste — ver
@@ -109,6 +118,18 @@ com enriquecimento:
   5 categorias) e fica atrás só de `SG_UF` — confirma manter essas 3
   features mesmo com correlação linear fraca a nível de aluno (Seção 8 da
   EDA), decisão validada pelo SHAP em vez da correlação isolada.
+- **A quebra por UF explica a disparidade regional, e é bem mais extrema**:
+  a EDA revisada (`notebooks/01_EDA_Alfabetizacao.ipynb`, Seção 5) já
+  mostrava 47pp de diferença real entre Ceará (81,5%) e Rio Grande do
+  Norte (34,3%) — mais de 3x o intervalo por região (~13pp). No modelo,
+  isso se traduz em comportamento degenerado: recall de **0%** em 6 UFs
+  (RN, SE, RR, BA, AP, DF) e de **≥99%** em outras 6 (PE, MG, PR, GO, ES,
+  CE) — 12 de 27 UFs (44%) onde o modelo essencialmente decora a taxa
+  histórica do estado em vez de aprender um padrão por aluno. Como
+  `SG_UF` domina o SHAP e é praticamente constante por município, o
+  RandomForest (com `max_depth=10` e pouco mais que features territoriais
+  disponíveis) tem capacidade de sobra pra memorizar a média de cada
+  estado.
 
 ## Insights encontrados
 
@@ -128,7 +149,7 @@ com enriquecimento:
 - Amostra da rede privada é pequena demais para generalizar.
 - Reconstrução da camada Gold feita localmente (fora do Databricks/AWS original da Fase 2) — ver seção "Reconstrução da camada Gold" abaixo para detalhes e possíveis pequenas diferenças de metodologia.
 - Renda (Censo 2022) e INSE (SAEB 2023) são fotos únicas, repetidas nos 3 anos do painel (2023-2025) — ver "Enriquecimento externo por município" abaixo.
-- **Disparidade regional no modelo (achado central da modelagem)**: o RandomForest escolhido tem recall de apenas 11,6% no Norte contra 82,9% no Sudeste — muito além do que a diferença real na taxa de alfabetização (~15pp) justificaria. O SHAP aponta que o modelo aprendeu um padrão específico por `SG_UF` (principalmente Ceará e Bahia) e penaliza fortemente `REGIAO=Norte`. **Este modelo não deve ser usado para decisões de política pública sem antes mitigar essa disparidade** (ver "Aplicação prática" e "Evoluções futuras").
+- **Disparidade regional e, mais grave, por UF (achado central da modelagem)**: por região, o recall varia de 11,6% (Norte) a 82,9% (Sudeste). Por UF é degenerado: **0% de recall em 6 estados** (RN, SE, RR, BA, AP, DF) e **≥99% em outros 6** (PE, MG, PR, GO, ES, CE) — 44% das UFs onde o modelo decora a taxa histórica do estado em vez de aprender por aluno. O SHAP confirma que `SG_UF` domina a decisão. **Este modelo não deve ser usado para decisões de política pública sem antes corrigir esse comportamento** (ver "Aplicação prática" e "Evoluções futuras").
 - O split treino/teste é temporal (2023-2024 → 2025), e a taxa real de alfabetização mudou entre os recortes (51,3% no treino vs. 58,6% no teste) — o modelo é avaliado sob um *dataset shift* real, não uma amostra idêntica reembaralhada.
 
 ## Aplicação prática para políticas públicas
@@ -136,23 +157,32 @@ com enriquecimento:
 Na forma atual, o modelo serve melhor como **ferramenta exploratória** —
 ex.: cruzar `PC_FAMILIAS_POBREZA`/`MEDIA_INSE`/`RENDA_PER_CAPITA_MEDIA` por
 município pra priorizar visitas técnicas ou repasse de material — do que
-como critério automático de decisão. A disparidade regional encontrada
-(recall de 11,6% no Norte) significa que, se usado para sinalizar "alunos
-em risco" hoje, o modelo **erraria mais justamente nos alunos do Norte** —
-a região que mais precisa de atenção segundo os próprios dados. Qualquer
-uso em política pública exige primeiro mitigar essa disparidade (ver
-"Evoluções futuras") e, enquanto isso não acontece, avaliar as previsões
-sempre segmentadas por região/UF, nunca por uma métrica agregada nacional.
+como critério automático de decisão. O comportamento degenerado por UF
+(recall 0% em 6 estados, ≥99% em outros 6) significa que, se usado para
+sinalizar "alunos em risco" hoje, o modelo simplesmente reproduziria a
+média histórica de cada estado — não identificaria alunos individuais em
+risco em nenhuma UF, e erraria sistematicamente mais nos estados que já
+estão pior (RN, SE, BA). Qualquer uso em política pública exige primeiro
+corrigir esse comportamento (ver "Evoluções futuras") e, enquanto isso não
+acontece, avaliar as previsões sempre segmentadas por UF — a região é
+granularidade grossa demais até pra diagnosticar o problema (ver EDA,
+Seção 5).
 
 ## Possíveis evoluções futuras
 
-- **Mitigar a disparidade regional** antes de qualquer uso prático: testar
-  recalibração por região, remoção/ponderação de `SG_UF` como feature, ou
-  métricas de otimização sensíveis a fairness (ex.: equalized odds).
-- Revisitar a EDA (`notebooks/01_EDA_Alfabetizacao.ipynb`) trazendo a
-  desigualdade regional/por UF **excluindo a rede privada** (amostra
-  irrisória, ~25 alunos) para um retrato mais limpo da desigualdade real
-  entre redes municipal e estadual.
+- **Corrigir o comportamento degenerado por UF** antes de qualquer uso
+  prático: o problema é por **UF**, não por região (a própria EDA mostra
+  que uma região, Nordeste, contém ao mesmo tempo o melhor e um dos piores
+  estados do país — "corrigir por região" nem endereçaria o caso CE x RN).
+  Caminhos a testar: limitar a profundidade das árvores pra reduzir a
+  capacidade de memorizar a média por estado, regularizar/ponderar o peso
+  de `SG_UF`, ou métricas de otimização sensíveis a fairness por grupo
+  (ex.: equalized odds) usando `SG_UF` como grupo protegido.
+- [x] ~~Revisitar a EDA trazendo a desigualdade regional/por UF excluindo
+  a rede privada~~ — feito em `notebooks/01_EDA_Alfabetizacao.ipynb`,
+  Seção 5 (branch `feature/eda-desigualdade-regional-sem-privada`): achado
+  de 47pp de disparidade por UF (vs. ~13pp por região) foi o que motivou
+  adicionar a quebra por UF nesta seção.
 - Obter acesso ao Atlas do Desenvolvimento Humano (IDHM) — não conseguimos
   a tempo (Atlas Brasil indisponível) e usamos CadÚnico/Censo/INSE como
   substituto (ver "Enriquecimento externo por município").

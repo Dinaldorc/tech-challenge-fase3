@@ -36,22 +36,23 @@ def evaluate_model(model, X_test: pd.DataFrame, y_test: pd.Series) -> dict:
     }
 
 
-def evaluate_by_region(model, X_test: pd.DataFrame, y_test: pd.Series, region_col: str = "REGIAO") -> pd.DataFrame:
-    """Quebra accuracy/precision/recall por REGIAO. A EDA (Seção 5) já
-    mostrava ~15pp de diferença na taxa de alfabetização entre a melhor
-    região (Centro-Oeste) e a pior (Norte) -- aqui verificamos se o
-    modelo reproduz, atenua ou agrava essa disparidade."""
+def evaluate_by_group(model, X_test: pd.DataFrame, y_test: pd.Series, group_col: str) -> pd.DataFrame:
+    """Quebra accuracy/precision/recall por `group_col` (ex.: "REGIAO" ou
+    "SG_UF"). A EDA (Seção 5, revisada) mostrou que a desigualdade real é
+    bem maior por UF (47pp, CE x RN) do que por região (~13pp) -- aqui
+    verificamos se o modelo reproduz, atenua ou agrava essa disparidade em
+    cada granularidade."""
     pred = model.predict(X_test)
     df = pd.DataFrame({
-        "regiao": X_test[region_col].to_numpy(),
+        "grupo": X_test[group_col].to_numpy(),
         "y_true": y_test.to_numpy(),
         "y_pred": pred,
     })
 
     linhas = []
-    for regiao, g in df.groupby("regiao"):
+    for grupo, g in df.groupby("grupo"):
         linhas.append({
-            "regiao": regiao,
+            group_col: grupo,
             "n": len(g),
             "taxa_real_alfabetizacao": g["y_true"].mean(),
             "accuracy": accuracy_score(g["y_true"], g["y_pred"]),

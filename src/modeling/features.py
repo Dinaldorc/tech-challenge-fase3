@@ -10,13 +10,6 @@ import pandas as pd
 
 TARGET_COL = "TARGET"
 
-# Agrupador para split treino/teste: ~70% dos alunos (ID_ALUNO) aparecem em
-# mais de um ANO_REFERENCIA na base (ver investigação da Seção 8 -- 1,09M em
-# 3 anos, 962k em 2 anos, de 2,95M alunos únicos). Um split aleatório por
-# linha vazaria o mesmo aluno entre treino e teste; o split precisa ser
-# agrupado por ID_ALUNO (ex.: sklearn GroupShuffleSplit/GroupKFold).
-GROUP_COL = "ID_ALUNO"
-
 # Leakage direto: determinístico ou quase-determinístico em relação ao
 # TARGET (derivado de VL_PROFICIENCIA_LP ou das flags de participação na
 # prova -- Seção 7 da EDA). Nunca deve entrar no modelo.
@@ -57,6 +50,12 @@ LEAKAGE_PARCIAL = [
 # generalizável (ou são constantes na base atual -- só 2º ano avaliado).
 IDENTIFICADORES_METADADOS = [
     "SK_ALUNO",
+    # ID_ALUNO NAO e' um identificador persistente entre anos: a faixa
+    # numerica se repete quase identica em 2023/2024/2025 (todas comecam em
+    # 11.000.001) e, dos IDs "repetidos" entre anos, 0% ficam na mesma
+    # escola -- e' um ID gerado por ano, nao um registro nacional do aluno.
+    # Nao serve pra agrupar split nem como feature.
+    "ID_ALUNO",
     "ID_ESCOLA",         # alta cardinalidade (~43,6 mil escolas); fora do baseline
     "DT_PROCESSAMENTO",
     "TS_PROCESSAMENTO",
@@ -116,14 +115,9 @@ def get_feature_columns(include_socioeconomico: bool = True) -> list[str]:
 
 def select_features(
     df: pd.DataFrame, include_socioeconomico: bool = True
-) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
-    """Retorna (X, y, groups) prontos para split/treino.
-
-    `groups` é o `ID_ALUNO` -- use com GroupShuffleSplit/GroupKFold pra
-    evitar que o mesmo aluno apareça em treino e teste (ver GROUP_COL).
-    """
+) -> tuple[pd.DataFrame, pd.Series]:
+    """Retorna (X, y) prontos para split/treino."""
     cols = get_feature_columns(include_socioeconomico=include_socioeconomico)
     X = df[cols].copy()
     y = df[TARGET_COL].copy()
-    groups = df[GROUP_COL].copy()
-    return X, y, groups
+    return X, y

@@ -1,29 +1,114 @@
 # Tech Challenge – Fase 3: Predição e Inteligência Analítica para Alfabetização no Brasil
 
 ## Contexto do problema
-_(descrever o problema da alfabetização infantil no Brasil e por que antecipar risco importa para gestores públicos)_
+
+Alfabetizar toda criança até o final do 2º ano do Ensino Fundamental é meta
+do Compromisso Nacional Criança Alfabetizada, mas o resultado varia muito
+pelo território: nos dados usados aqui, a diferença entre a melhor e a pior
+região chega a ~15 pontos percentuais, e o achado do SHAP (ver "Interpretação
+dos resultados") mostra que essa desigualdade está concentrada em poucos
+estados específicos, não distribuída de forma difusa entre regiões.
+
+Hoje o INEP só identifica quem não se alfabetizou **depois** da avaliação
+anual — quando já é tarde para intervir naquele ano letivo. Um modelo que
+aponte, com base em variáveis territoriais e socioeconômicas conhecidas
+*antes* da prova, quais municípios/perfis têm maior risco de baixa
+alfabetização permite que gestores públicos direcionem reforço escolar,
+merenda, transporte ou material didático de forma proativa — não reativa.
 
 ## Objetivo analítico
 Desenvolver um modelo supervisionado que preveja se um aluno será considerado alfabetizado ou não alfabetizado, com base em variáveis educacionais, territoriais e socioeconômicas.
 
 ## Descrição da base utilizada
-_(fontes: camada Gold da Fase 2 + enriquecimentos externos — IBGE, Censo Escolar, FUNDEB, PNAD, Atlas do Desenvolvimento Humano, Cadastro Único)_
+
+Base a nível de aluno (`FT_MACHINE_LEARNING`, ~6,09 milhões de linhas,
+2023-2025), reconstruída localmente a partir dos microdados públicos do
+INEP (ver "Reconstrução da camada Gold" abaixo), enriquecida com 3 fontes
+externas por município (ver "Enriquecimento externo por município"
+abaixo): pobreza (CadÚnico), renda per capita (Censo 2022) e nível
+socioeconômico escolar (INSE 2023). Não obtivemos acesso a tempo ao Atlas
+do Desenvolvimento Humano (IDHM) — essas 3 fontes o substituem no projeto.
 
 ## Etapas de modelagem
-- Análise exploratória
-- Tratamento de valores faltantes e leakage
-- Feature engineering e encoding
-- Pipeline sklearn (pré-processamento + modelo)
-- Treinamento, validação e otimização
+- [x] Análise exploratória — `notebooks/01_EDA_Alfabetizacao.ipynb`
+- [x] Tratamento de valores faltantes e leakage — `src/modeling/features.py`
+- [x] Feature engineering e encoding — `src/modeling/pipeline.py`
+- [x] Pipeline sklearn (pré-processamento + modelo) — `src/modeling/pipeline.py`
+- [x] Treinamento, validação e otimização — `src/modeling/run_baseline.py` (split temporal em `src/modeling/split.py`)
 
 ## Escolha do algoritmo
-_(preencher após experimentação)_
+
+Comparamos `LogisticRegression` e `RandomForestClassifier`, com e sem o
+enriquecimento socioeconômico, no split temporal (treino 2023-2024, teste
+2025 — ver `src/modeling/split.py`). O **RandomForest com enriquecimento**
+venceu em todas as métricas (ver tabela abaixo) — é o único cenário que
+supera a acurácia de "sempre prever a classe majoritária" no teste.
+Escolhido por ser o melhor resultado e por permitir a interpretação via
+SHAP (Seção "Interpretação dos resultados").
 
 ## Métricas de avaliação
-_(preencher)_
+
+Split temporal: treino em 2023-2024 (3.867.999 linhas, 51,3% alfabetizados),
+teste em 2025 (2.222.792 linhas, 58,6% alfabetizados — note a mudança na
+taxa real entre os recortes, ver "Limitações do projeto").
+
+| Modelo | Enriquecimento | Acurácia | Precisão | Recall | F1 | ROC-AUC |
+|---|---|---|---|---|---|---|
+| LogisticRegression | não | 0,5767 | 0,6286 | 0,6792 | 0,6529 | 0,5947 |
+| LogisticRegression | sim | 0,5858 | 0,6286 | 0,7170 | 0,6699 | 0,6000 |
+| RandomForest | não | 0,5819 | 0,6345 | 0,6765 | 0,6548 | 0,5954 |
+| **RandomForest** | **sim** | **0,5992** | **0,6547** | 0,6695 | 0,6620 | **0,6184** |
+
+*(baseline de "sempre prever a classe majoritária" no teste = 0,5862 de
+acurácia — ver `reports/baseline_comparison.csv`)*
+
+**Quebra por região** (melhor modelo — RandomForest + enriquecimento,
+`reports/baseline_metricas_por_regiao.csv`):
+
+| Região | Taxa real de alfabetização | Acurácia | Precisão | Recall |
+|---|---|---|---|---|
+| Norte | 52,2% | 0,5117 | 0,6931 | **0,1158** |
+| Sudeste | 57,2% | 0,6007 | 0,6115 | 0,8288 |
+| Sul | 58,6% | 0,6199 | 0,6851 | 0,6508 |
+| Nordeste | 60,7% | 0,6087 | 0,7030 | 0,6159 |
+| Centro-Oeste | 66,7% | 0,6382 | 0,7127 | 0,7667 |
+
+O recall varia de 11,6% a 82,9% — uma disparidade desproporcional à
+diferença real na taxa de alfabetização (~15pp). Ver "Interpretação dos
+resultados" e "Limitações do projeto".
 
 ## Interpretação dos resultados
-_(Feature Importance / SHAP)_
+
+SHAP (`TreeExplainer`, amostra de 20 mil linhas do teste — ver
+`src/modeling/explain.py` e `reports/shap_importancia.csv`) no RandomForest
+com enriquecimento:
+
+| Variável | Importância média (\|SHAP\|) |
+|---|---|
+| `SG_UF` | 0,085 |
+| `REGIAO` | 0,019 |
+| `PC_FAMILIAS_POBREZA` | 0,016 |
+| `MEDIA_INSE` | 0,010 |
+| `RENDA_PER_CAPITA_MEDIA` | 0,006 |
+| `ANO_REFERENCIA` | 0,005 |
+| `TP_DEPENDENCIA` | 0,005 |
+
+- **`SG_UF` domina a decisão** (4,5x mais que `REGIAO` agregada), puxado
+  principalmente por `SG_UF=CE` e `SG_UF=BA` — o modelo capturou um padrão
+  específico de estado, não um padrão regional difuso. Faz sentido dado que
+  o Ceará tem um programa estadual de alfabetização amplamente reconhecido
+  nacionalmente.
+- **A disparidade regional tem causa identificada**: o efeito médio (com
+  sinal) de `REGIAO=Norte` é -0,037 — o mais negativo entre as 5 regiões
+  por larga margem (a segunda pior, Sul, fica em -0,005; ver
+  `reports/shap_efeito_regiao.csv`). O modelo aprendeu a associar "Norte"
+  fortemente a "não alfabetizado", o que explica o recall de 11,6% na
+  região.
+- **O enriquecimento socioeconômico se justificou**: `PC_FAMILIAS_POBREZA`
+  sozinha (0,016) vale mais que toda a `REGIAO` agregada (0,019 somando as
+  5 categorias) e fica atrás só de `SG_UF` — confirma manter essas 3
+  features mesmo com correlação linear fraca a nível de aluno (Seção 8 da
+  EDA), decisão validada pelo SHAP em vez da correlação isolada.
 
 ## Insights encontrados
 
@@ -32,18 +117,51 @@ _(Feature Importance / SHAP)_
 - **Rede**: base majoritariamente municipal (87%); amostra da rede privada é irrisória (25 alunos) e não deve ser usada para conclusões.
 - **Data leakage crítico identificado na EDA**: `TARGET` é 100% determinístico a partir de `VL_PROFICIENCIA_LP >= 743` (sem exceções) e de flags de participação na prova. Essas variáveis (e derivadas) foram excluídas do conjunto de features de modelagem — ver `notebooks/01_EDA_Alfabetizacao.ipynb`, seção 7.
 - Agregados municipais/estaduais (`PC_ALUNO_ALFABETIZADO*`, `VL_MEDIA_LP*`) têm vazamento parcial (incluem o próprio aluno no cálculo) e devem ser usados com cautela ou recalculados como *leave-one-out*.
+- **`DESEMPENHO_RELATIVO` também é leakage** (derivado de `DIF_MEDIA_ESTADO`, que vem de `VL_PROFICIENCIA_LP`) e não estava na lista original da EDA — encontrado ao formalizar a seleção de features em código (`src/modeling/features.py`).
+- **`ID_ALUNO` não é um identificador persistente entre anos**: a faixa numérica se repete quase idêntica em 2023/2024/2025 (todas começam em 11.000.001) e, dos "mesmos" IDs que aparecem em anos diferentes, 0% correspondem à mesma escola — é um ID gerado por ano, não um registro nacional do aluno. Não há vazamento de aluno entre treino e teste a evitar.
+- **Sem o enriquecimento externo, o modelo mal supera prever a classe majoritária** (`REGIAO`/`SG_UF`/`TP_DEPENDENCIA`/`ANO_REFERENCIA` sozinhos: acurácia 0,577-0,582 vs. baseline de 0,586) — quase todo o sinal individual forte foi removido como leakage, então o que resta é fraco por natureza.
+- **O modelo reproduz e amplia a desigualdade regional**: o recall varia de 11,6% (Norte) a 82,9% (Sudeste), desproporcional à diferença real na taxa de alfabetização (~15pp) — ver "Interpretação dos resultados".
 
 ## Limitações do projeto
 
 - O indicador do INEP trata "aluno não avaliado" como "não alfabetizado" por definição — mistura duas populações conceitualmente diferentes (quem não aprendeu vs. quem não fez a prova).
 - Amostra da rede privada é pequena demais para generalizar.
 - Reconstrução da camada Gold feita localmente (fora do Databricks/AWS original da Fase 2) — ver seção "Reconstrução da camada Gold" abaixo para detalhes e possíveis pequenas diferenças de metodologia.
+- Renda (Censo 2022) e INSE (SAEB 2023) são fotos únicas, repetidas nos 3 anos do painel (2023-2025) — ver "Enriquecimento externo por município" abaixo.
+- **Disparidade regional no modelo (achado central da modelagem)**: o RandomForest escolhido tem recall de apenas 11,6% no Norte contra 82,9% no Sudeste — muito além do que a diferença real na taxa de alfabetização (~15pp) justificaria. O SHAP aponta que o modelo aprendeu um padrão específico por `SG_UF` (principalmente Ceará e Bahia) e penaliza fortemente `REGIAO=Norte`. **Este modelo não deve ser usado para decisões de política pública sem antes mitigar essa disparidade** (ver "Aplicação prática" e "Evoluções futuras").
+- O split treino/teste é temporal (2023-2024 → 2025), e a taxa real de alfabetização mudou entre os recortes (51,3% no treino vs. 58,6% no teste) — o modelo é avaliado sob um *dataset shift* real, não uma amostra idêntica reembaralhada.
 
 ## Aplicação prática para políticas públicas
-_(preencher)_
+
+Na forma atual, o modelo serve melhor como **ferramenta exploratória** —
+ex.: cruzar `PC_FAMILIAS_POBREZA`/`MEDIA_INSE`/`RENDA_PER_CAPITA_MEDIA` por
+município pra priorizar visitas técnicas ou repasse de material — do que
+como critério automático de decisão. A disparidade regional encontrada
+(recall de 11,6% no Norte) significa que, se usado para sinalizar "alunos
+em risco" hoje, o modelo **erraria mais justamente nos alunos do Norte** —
+a região que mais precisa de atenção segundo os próprios dados. Qualquer
+uso em política pública exige primeiro mitigar essa disparidade (ver
+"Evoluções futuras") e, enquanto isso não acontece, avaliar as previsões
+sempre segmentadas por região/UF, nunca por uma métrica agregada nacional.
 
 ## Possíveis evoluções futuras
-_(preencher)_
+
+- **Mitigar a disparidade regional** antes de qualquer uso prático: testar
+  recalibração por região, remoção/ponderação de `SG_UF` como feature, ou
+  métricas de otimização sensíveis a fairness (ex.: equalized odds).
+- Revisitar a EDA (`notebooks/01_EDA_Alfabetizacao.ipynb`) trazendo a
+  desigualdade regional/por UF **excluindo a rede privada** (amostra
+  irrisória, ~25 alunos) para um retrato mais limpo da desigualdade real
+  entre redes municipal e estadual.
+- Obter acesso ao Atlas do Desenvolvimento Humano (IDHM) — não conseguimos
+  a tempo (Atlas Brasil indisponível) e usamos CadÚnico/Censo/INSE como
+  substituto (ver "Enriquecimento externo por município").
+- Testar `ID_ESCOLA` via encoding específico (ex.: target encoding) — ficou
+  fora do baseline por alta cardinalidade (~43,6 mil escolas), mas pode
+  capturar efeito de escola além do efeito de estado.
+- Tuning de hiperparâmetros do RandomForest e teste de outros algoritmos em
+  árvore (XGBoost, LightGBM) agora que o pipeline (`src/modeling/pipeline.py`)
+  já injeta qualquer classificador sklearn sem mudança de código.
 
 ## Como rodar
 

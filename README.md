@@ -119,3 +119,40 @@ pipeline. A `FT_MACHINE_LEARNING` não foi incluída por ser grande demais
 
 Os dados brutos e as camadas intermediárias (bronze/silver/gold) **não são
 versionados no Git** (ver `.gitignore`) — apenas o código que as gera.
+
+### Enriquecimento externo por município (pobreza, renda, infraestrutura)
+
+Testamos a hipótese de que municípios mais pobres e com pior infraestrutura
+educacional têm menor taxa de alfabetização (ver `notebooks/01_EDA_Alfabetizacao.ipynb`,
+Seção 8). Não conseguimos acesso ao Atlas do Desenvolvimento Humano (IDHM)
+a tempo (ferramenta do Atlas Brasil indisponível) — as 3 fontes abaixo o
+substituem para este projeto:
+
+- **Pobreza** — CadÚnico (VIS Data 3), % de famílias na faixa de pobreza do
+  PBF por município (08/2026): `data/gold_sample/cadastro_unico_pobreza/CADUNICO_FAMILIAS_POBREZA_MUNICIPIO.csv`
+  (já incluído no repositório).
+- **Renda** — Censo 2022 (SIDRA, tabela 10295), renda per capita média por
+  município, divulgado em out/2025. Baixe e salve em
+  `data/raw/censo_renda/censo2022_renda_per_capita_municipio.csv`.
+- **Infraestrutura socioeconômica escolar** — INSE 2023 (INEP/SAEB), por
+  escola. Baixe e salve em `data/raw/INSE/INSE_2023_escolas.xlsx`.
+
+**Atenção ao join:** o CadÚnico usa o código IBGE **sem dígito verificador**
+(6 dígitos, ex.: `120001` para Acrelândia), enquanto `CO_MUNICIPIO` no
+restante do projeto usa o código completo (7 dígitos, ex.: `1200013`). A
+pipeline (`_build_dim_municipio_socioeconomico` em `src/preprocessing/gold.py`)
+já faz essa conversão (`CO_MUNICIPIO // 10`) antes do merge.
+
+**Resultado:** as 3 variáveis (`PC_FAMILIAS_POBREZA`, `RENDA_PER_CAPITA_MEDIA`,
+`MEDIA_INSE`) correlacionam na direção esperada com a taxa de alfabetização
+a nível de **município** (|r| entre 0,18 e 0,29), mas a correlação cai bastante
+a nível de **aluno** — a granularidade real de treino da `FT_MACHINE_LEARNING`
+(|r| entre 0,006 e 0,073, praticamente ruído para renda). Isso é esperado
+(correlação agregada por município é sempre inflada em relação à correlação
+por indivíduo) e não significa que as features sejam inúteis num modelo
+multivariado — a decisão de manter ou descartar cada uma fica para a etapa
+de modelagem (importância de feature / SHAP), não para a correlação isolada.
+
+**Limitação:** renda (Censo 2022) e INSE (SAEB 2023) são fotos únicas — o
+mesmo valor se repete para um dado município nos 3 anos do painel
+(2023-2025), diferente do CadÚnico que já reflete a referência mais recente.

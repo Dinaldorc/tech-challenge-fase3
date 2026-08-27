@@ -23,6 +23,47 @@ _ORDEM_CLASSIFICACAO = {
 }
 
 
+def _build_dim_municipio_socioeconomico() -> pd.DataFrame:
+    """Enriquecimento externo por município (Seção 8 da EDA):
+    pobreza (CadÚnico), renda (Censo 2022) e infraestrutura socioeconômica
+    escolar (INSE). Correlação com o TARGET é fraca/moderada (|r| entre
+    0,18 e 0,29) -- entram como candidatas a feature, não como certeza;
+    a decisão de manter/descartar cabe à etapa de modelagem (SHAP).
+
+    Fontes esperadas em disco (não versionadas no Git, ver README):
+    data/raw/censo_renda/censo2022_renda_per_capita_municipio.csv,
+    data/raw/INSE/INSE_2023_escolas.xlsx,
+    data/gold_sample/cadastro_unico_pobreza/CADUNICO_FAMILIAS_POBREZA_MUNICIPIO.csv
+    """
+    renda = pd.read_csv(c.RAW_PATH / "censo_renda" / "censo2022_renda_per_capita_municipio.csv")
+    dim = renda[["CO_MUNICIPIO", "RENDA_PER_CAPITA_MEDIA"]].copy()
+
+    inse = pd.read_excel(c.RAW_PATH / "INSE" / "INSE_2023_escolas.xlsx")
+    inse_municipio = inse.groupby("CO_MUNICIPIO", as_index=False)["MEDIA_INSE"].mean()
+    dim = dim.merge(inse_municipio, on="CO_MUNICIPIO", how="left")
+
+    cadunico = pd.read_csv(
+        c.BASE_DIR / "data" / "gold_sample" / "cadastro_unico_pobreza" / "CADUNICO_FAMILIAS_POBREZA_MUNICIPIO.csv"
+    )
+    cadunico["PC_FAMILIAS_POBREZA"] = (
+        cadunico["QT_FAMILIAS_POBREZA_FAIXA_PBF"]
+        / (cadunico["QT_FAMILIAS_POBREZA_FAIXA_PBF"]
+           + cadunico["QT_FAMILIAS_ATE_MEIO_SM"]
+           + cadunico["QT_FAMILIAS_ACIMA_MEIO_SM"])
+        * 100
+    )
+    # O CadUnico usa o codigo IBGE sem digito verificador (6 digitos, ex.:
+    # 120001), enquanto as demais fontes e o CO_MUNICIPIO do projeto usam o
+    # codigo completo (7 digitos, ex.: 1200013) -- dai o `// 10`.
+    dim["CO_MUNICIPIO_6"] = dim["CO_MUNICIPIO"] // 10
+    dim = dim.merge(
+        cadunico[["CO_MUNICIPIO", "PC_FAMILIAS_POBREZA"]].rename(columns={"CO_MUNICIPIO": "CO_MUNICIPIO_6"}),
+        on="CO_MUNICIPIO_6", how="left",
+    ).drop(columns=["CO_MUNICIPIO_6"])
+
+    return dim
+
+
 def build_ft_machine_learning() -> pd.DataFrame:
     aluno = c.read_table(c.SILVER_PATH, c.TS_ALUNO)
     municipio = c.read_table(c.SILVER_PATH, c.TS_MUNICIPIO)
@@ -63,6 +104,9 @@ def build_ft_machine_learning() -> pd.DataFrame:
     df["TARGET"] = df["IN_ALFABETIZADO"]
     df["IN_PROVA_VALIDA"] = ((df["IN_PRESENCA_LP"] == 1) & (df["IN_PREENCHIMENTO_LP"] == 1)).astype(int)
     df["IN_POSSUI_PROFICIENCIA"] = df["VL_PROFICIENCIA_LP"].notna().astype(int)
+
+    socioeconomico = _build_dim_municipio_socioeconomico()
+    df = df.merge(socioeconomico, on="CO_MUNICIPIO", how="left")
 
     c.write_table(df, c.GOLD_PATH, c.FT_MACHINE_LEARNING)
     return df

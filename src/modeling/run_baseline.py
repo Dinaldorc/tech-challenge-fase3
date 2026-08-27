@@ -17,6 +17,7 @@ from . import pipeline as pl
 from . import split as sp
 
 REPORT_PATH = c.BASE_DIR / "reports" / "baseline_comparison.csv"
+REGIAO_REPORT_PATH = c.BASE_DIR / "reports" / "baseline_metricas_por_regiao.csv"
 
 CLASSIFICADORES = {
     "LogisticRegression": lambda: LogisticRegression(max_iter=1000),
@@ -31,6 +32,7 @@ def run() -> pd.DataFrame:
     train_df, test_df = sp.split_temporal(df)
 
     resultados = []
+    modelos_ajustados = {}
     for nome, factory in CLASSIFICADORES.items():
         for include_socio in [False, True]:
             X_train, y_train = feat.select_features(train_df, include_socioeconomico=include_socio)
@@ -42,6 +44,7 @@ def run() -> pd.DataFrame:
             metrics["modelo"] = nome
             metrics["enriquecimento_socioeconomico"] = include_socio
             resultados.append(metrics)
+            modelos_ajustados[(nome, include_socio)] = (model, X_test, y_test)
 
             print(
                 f"{nome:<18} | socioeconomico={include_socio!s:<5} | "
@@ -51,9 +54,22 @@ def run() -> pd.DataFrame:
             )
 
     resultado_df = pd.DataFrame(resultados)
-    cols_resumo = [c for c in resultado_df.columns if c != "confusion_matrix"]
+    cols_resumo = [col for col in resultado_df.columns if col != "confusion_matrix"]
     resultado_df[cols_resumo].to_csv(REPORT_PATH, index=False)
     print(f"\nResumo salvo em {REPORT_PATH}")
+
+    # Melhor cenario (maior ROC-AUC) -- quebra por regiao pra checar se o
+    # modelo reproduz/agrava o gap de ~15pp achado na EDA (Secao 5).
+    melhor_chave = resultado_df.loc[resultado_df["roc_auc"].idxmax(), ["modelo", "enriquecimento_socioeconomico"]]
+    melhor = (melhor_chave["modelo"], bool(melhor_chave["enriquecimento_socioeconomico"]))
+    model, X_test, y_test = modelos_ajustados[melhor]
+
+    print(f"\nMelhor cenario ({melhor[0]}, socioeconomico={melhor[1]}) -- metricas por regiao:")
+    regiao_df = ev.evaluate_by_region(model, X_test, y_test)
+    print(regiao_df.to_string(index=False))
+    regiao_df.to_csv(REGIAO_REPORT_PATH, index=False)
+    print(f"\nQuebra por regiao salva em {REGIAO_REPORT_PATH}")
+
     return resultado_df
 
 

@@ -34,3 +34,28 @@ def evaluate_model(model, X_test: pd.DataFrame, y_test: pd.Series) -> dict:
         "roc_auc": roc_auc_score(y_test, proba),
         "confusion_matrix": confusion_matrix(y_test, pred).tolist(),
     }
+
+
+def evaluate_by_region(model, X_test: pd.DataFrame, y_test: pd.Series, region_col: str = "REGIAO") -> pd.DataFrame:
+    """Quebra accuracy/precision/recall por REGIAO. A EDA (Seção 5) já
+    mostrava ~15pp de diferença na taxa de alfabetização entre a melhor
+    região (Centro-Oeste) e a pior (Norte) -- aqui verificamos se o
+    modelo reproduz, atenua ou agrava essa disparidade."""
+    pred = model.predict(X_test)
+    df = pd.DataFrame({
+        "regiao": X_test[region_col].to_numpy(),
+        "y_true": y_test.to_numpy(),
+        "y_pred": pred,
+    })
+
+    linhas = []
+    for regiao, g in df.groupby("regiao"):
+        linhas.append({
+            "regiao": regiao,
+            "n": len(g),
+            "taxa_real_alfabetizacao": g["y_true"].mean(),
+            "accuracy": accuracy_score(g["y_true"], g["y_pred"]),
+            "precision": precision_score(g["y_true"], g["y_pred"], zero_division=0),
+            "recall": recall_score(g["y_true"], g["y_pred"], zero_division=0),
+        })
+    return pd.DataFrame(linhas).sort_values("taxa_real_alfabetizacao").reset_index(drop=True)

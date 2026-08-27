@@ -113,11 +113,24 @@ def get_feature_columns(include_socioeconomico: bool = True) -> list[str]:
     return cols
 
 
+def _sanitize_dtypes(X: pd.DataFrame) -> pd.DataFrame:
+    """sklearn/numpy não lidam bem com `pd.NA` de dtypes nullable do pandas
+    (ex.: TP_DEPENDENCIA em Int64) -- o SimpleImputer quebra com
+    "boolean value of NA is ambiguous". Converte essas colunas para
+    float64 (usa `np.nan`, que sklearn entende nativamente). Colunas
+    `category` (ex.: SG_UF) não precisam disso e ficam como estão."""
+    for col in X.columns:
+        dtype = X[col].dtype
+        if pd.api.types.is_extension_array_dtype(dtype) and pd.api.types.is_numeric_dtype(dtype):
+            X[col] = X[col].astype("float64")
+    return X
+
+
 def select_features(
     df: pd.DataFrame, include_socioeconomico: bool = True
 ) -> tuple[pd.DataFrame, pd.Series]:
     """Retorna (X, y) prontos para split/treino."""
     cols = get_feature_columns(include_socioeconomico=include_socioeconomico)
-    X = df[cols].copy()
+    X = _sanitize_dtypes(df[cols].copy())
     y = df[TARGET_COL].copy()
     return X, y

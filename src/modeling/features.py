@@ -63,6 +63,10 @@ IDENTIFICADORES_METADADOS = [
     "MES_CARGA",          # constante na base atual
     "TP_SERIE",           # constante na base atual (só 2º ano)
     "DS_SERIE",           # idem, versão texto
+    # A partir da decisao de modelar so com o ano de 2025 (ver split.py),
+    # ANO_REFERENCIA vira constante -- mesma categoria de TP_SERIE/ANO_CARGA
+    # acima, zero variancia, zero poder preditivo.
+    "ANO_REFERENCIA",
 ]
 
 # Redundantes: mesma informação já coberta por outra coluna mantida.
@@ -91,25 +95,42 @@ FEATURES_SOCIOECONOMICAS = [
     "MEDIA_INSE",
 ]
 
+# Infraestrutura escolar por município (Censo Escolar 2025), adicionada
+# para tentar reduzir a degeneração de recall por UF (passo 5 da
+# modelagem): ID_ESCOLA não pode ser usado por escola individual (é uma
+# máscara re-sorteada a cada ano, não corresponde a uma escola real
+# estável -- ver `IDENTIFICADORES_METADADOS`), então isso fica no mesmo
+# nível de granularidade municipal do enriquecimento socioeconômico.
+FEATURES_INFRAESTRUTURA_ESCOLAR = [
+    "PC_ESCOLAS_BIBLIOTECA",
+    "PC_ESCOLAS_LAB_INFORMATICA",
+    "PC_ESCOLAS_INTERNET_ALUNOS",
+]
+
 # Features seguras (conhecidas antes da prova, sem relação matemática com o
 # resultado) -- base do modelo independente do enriquecimento externo.
+# ANO_REFERENCIA nao entra: modelagem restrita a 2025 (ver split.py), entao
+# viraria constante -- ver nota em IDENTIFICADORES_METADADOS.
 FEATURES_SEGURAS = [
-    "ANO_REFERENCIA",
     "REGIAO",
     "SG_UF",
     "TP_DEPENDENCIA",
 ]
 
 
-def get_feature_columns(include_socioeconomico: bool = True) -> list[str]:
+def get_feature_columns(include_socioeconomico: bool = True, include_infraestrutura: bool = False) -> list[str]:
     """Lista de colunas seguras para treinar o modelo.
 
     `include_socioeconomico=False` reproduz o baseline sem o enriquecimento
     externo (pobreza/renda/INSE), para comparação -- ver Seção 8 da EDA.
+    `include_infraestrutura=True` soma as 3 features do Censo Escolar
+    (biblioteca/laboratório/internet por município).
     """
     cols = list(FEATURES_SEGURAS)
     if include_socioeconomico:
         cols += FEATURES_SOCIOECONOMICAS
+    if include_infraestrutura:
+        cols += FEATURES_INFRAESTRUTURA_ESCOLAR
     return cols
 
 
@@ -127,10 +148,10 @@ def _sanitize_dtypes(X: pd.DataFrame) -> pd.DataFrame:
 
 
 def select_features(
-    df: pd.DataFrame, include_socioeconomico: bool = True
+    df: pd.DataFrame, include_socioeconomico: bool = True, include_infraestrutura: bool = False
 ) -> tuple[pd.DataFrame, pd.Series]:
     """Retorna (X, y) prontos para split/treino."""
-    cols = get_feature_columns(include_socioeconomico=include_socioeconomico)
+    cols = get_feature_columns(include_socioeconomico=include_socioeconomico, include_infraestrutura=include_infraestrutura)
     X = _sanitize_dtypes(df[cols].copy())
     y = df[TARGET_COL].copy()
     return X, y

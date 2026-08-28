@@ -1,7 +1,8 @@
 """
 Compara baselines de modelagem -- LogisticRegression x RandomForest, com e
 sem o enriquecimento socioeconômico (CadÚnico/Censo/INSE, Seção 8 da EDA)
--- usando o split temporal do passo 2 (treino 2023-2024, teste 2025).
+-- usando o split do passo 2 (só ano de 2025, 70/30 aleatório estratificado
+por TARGET -- ver split.py).
 
 python -m src.modeling.run_baseline
 """
@@ -19,6 +20,7 @@ from . import split as sp
 REPORT_PATH = c.BASE_DIR / "reports" / "baseline_comparison.csv"
 REGIAO_REPORT_PATH = c.BASE_DIR / "reports" / "baseline_metricas_por_regiao.csv"
 UF_REPORT_PATH = c.BASE_DIR / "reports" / "baseline_metricas_por_uf.csv"
+UF_INFRA_REPORT_PATH = c.BASE_DIR / "reports" / "baseline_metricas_por_uf_com_infraestrutura.csv"
 
 CLASSIFICADORES = {
     "LogisticRegression": lambda: LogisticRegression(max_iter=1000),
@@ -30,7 +32,7 @@ CLASSIFICADORES = {
 
 def run() -> pd.DataFrame:
     df = c.read_table(c.GOLD_PATH, c.FT_MACHINE_LEARNING)
-    train_df, test_df = sp.split_temporal(df)
+    train_df, test_df = sp.split_2025(df)
 
     resultados = []
     modelos_ajustados = {}
@@ -77,6 +79,27 @@ def run() -> pd.DataFrame:
     print(uf_df.to_string(index=False))
     uf_df.to_csv(UF_REPORT_PATH, index=False)
     print(f"Quebra por UF salva em {UF_REPORT_PATH}")
+    n_zero, n_full = (uf_df["recall"] == 0).sum(), (uf_df["recall"] >= 0.99).sum()
+    print(f"UFs degeneradas (recall=0 ou >=0.99): {n_zero + n_full}/{len(uf_df)}")
+
+    # Teste extra: infraestrutura escolar (Censo Escolar) em cima do melhor
+    # cenario, pra ver se reduz a degeneracao por UF.
+    factory_melhor = CLASSIFICADORES[melhor[0]]
+    X_train_i, y_train_i = feat.select_features(train_df, include_socioeconomico=True, include_infraestrutura=True)
+    X_test_i, y_test_i = feat.select_features(test_df, include_socioeconomico=True, include_infraestrutura=True)
+    model_infra = pl.build_pipeline(factory_melhor(), include_socioeconomico=True, include_infraestrutura=True)
+    model_infra.fit(X_train_i, y_train_i)
+    metrics_infra = ev.evaluate_model(model_infra, X_test_i, y_test_i)
+    uf_infra_df = ev.evaluate_by_group(model_infra, X_test_i, y_test_i, "SG_UF")
+    n_zero_i, n_full_i = (uf_infra_df["recall"] == 0).sum(), (uf_infra_df["recall"] >= 0.99).sum()
+
+    print(
+        f"\n{melhor[0]} + infraestrutura escolar | acc={metrics_infra['accuracy']:.4f} | "
+        f"f1={metrics_infra['f1']:.4f} | auc={metrics_infra['roc_auc']:.4f} | "
+        f"UFs degeneradas: {n_zero_i + n_full_i}/{len(uf_infra_df)}"
+    )
+    uf_infra_df.to_csv(UF_INFRA_REPORT_PATH, index=False)
+    print(f"Quebra por UF (com infraestrutura) salva em {UF_INFRA_REPORT_PATH}")
 
     return resultado_df
 

@@ -21,7 +21,7 @@ REGIAO_REPORT_PATH = c.BASE_DIR / "reports" / "shap_efeito_regiao.csv"
 
 def run() -> None:
     df = c.read_table(c.GOLD_PATH, c.FT_MACHINE_LEARNING)
-    train_df, test_df = sp.split_temporal(df)
+    train_df, test_df = sp.split_2025(df)
 
     X_train, y_train = feat.select_features(train_df, include_socioeconomico=True)
     X_test, _ = feat.select_features(test_df, include_socioeconomico=True)

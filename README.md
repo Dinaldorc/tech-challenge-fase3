@@ -19,6 +19,73 @@ merenda, transporte ou material didático de forma proativa — não reativa.
 ## Objetivo analítico
 Desenvolver um modelo supervisionado que preveja se um aluno será considerado alfabetizado ou não alfabetizado, com base em variáveis educacionais, territoriais e socioeconômicas.
 
+## Estratégia do projeto: perguntas de negócio
+
+O Tech Challenge pede que o projeto responda perguntas de negócio, não só
+produza métricas técnicas altas -- o foco é gerar inteligência aplicável
+ao contexto educacional brasileiro. Isso levou a reposicionar o projeto:
+o modelo de **aluno** (`FT_MACHINE_LEARNING`, seções acima) virou um
+resultado secundário documentado -- achado legítimo em si: não há sinal
+individual suficiente pra prever por aluno com os dados públicos
+disponíveis (ver "Limitações do projeto"). O entregável principal passou
+a ser um conjunto de análises a nível de **município**
+(`src/modeling/municipal_metas.py`, `municipal_clustering.py`,
+`run_municipal_*.py`), o grão onde as features realmente variam de
+município pra município e onde a EDA já mostrava sinal real (Seção 8).
+
+**1. Quais fatores mais impactam a alfabetização?** SHAP nos dois modelos
+(aluno e município) aponta o mesmo padrão: `SG_UF` domina, à frente de
+`REGIAO` -- não é uma diferença regional difusa, é específica de estado.
+No modelo municipal (mais interpretável pra essa pergunta), depois do
+estado o que mais pesa é o **desempenho do ano anterior**
+(`DIF_META_ALFABETIZACAO_ANTERIOR`, `PC_ALUNO_ALFABETIZADO_ANTERIOR`) e
+`PC_FAMILIAS_POBREZA` -- ver `reports/municipal_metas_shap_importancia.csv`.
+
+**2. Quais municípios apresentam maior risco educacional?**
+`src/modeling/run_municipal_risco.py` pontua cada um dos 5.500 municípios
+com a probabilidade de não bater a meta de alfabetização no próximo
+ciclo (RandomForest treinado com todo o histórico 2023-2025), usando os
+indicadores mais recentes (2025). Ranking completo em
+`reports/municipal_ranking_risco.csv`. Achado: os municípios de maior
+risco pontuado são majoritariamente do **Rio Grande do Sul** -- não por
+desempenho absoluto ruim (52-73% de alfabetização), mas por ter metas
+muito exigentes em relação à própria trajetória histórica (só 23,7% dos
+anos com meta batida, 2ª pior taxa do país). "Risco de não bater a meta"
+e "baixo desempenho absoluto" são coisas diferentes. A pontuação foi
+validada contra o `INDICE_RISCO_ESTRUTURAL` já existente (calculado de
+forma independente, só pela distribuição de níveis de proficiência):
+correlação de 0,341, coerente com duas métricas relacionadas mas distintas.
+
+**3. Quais regiões possuem padrões semelhantes?**
+`src/modeling/run_municipal_clustering.py` agrupa os municípios (K-Means,
+k=3 escolhido por silhouette score) por perfil socioeconômico +
+educacional, sem usar região/UF como feature. Resultado: os agrupamentos
+naturais **não coincidem com as 5 regiões oficiais do IBGE**. Sul +
+Sudeste + Centro-Oeste formam um cluster único (perfil de renda/
+infraestrutura alta). O Nordeste se divide em dois clusters opostos com
+pobreza e renda quase idênticas (~34% pobreza, ~R$800-900 de renda) mas
+30 pontos percentuais de diferença em alfabetização -- um puxado por
+Piauí/Ceará/Paraíba/Maranhão (82,6% de alfabetização, meta 2030 já
+batida), outro por Bahia/Rio Grande do Norte (52,7%, 27pp longe da meta).
+Ver `reports/municipal_clusters_perfil.csv` e
+`reports/municipal_clusters_x_regiao.csv`.
+
+**4. Como prever municípios que podem não atingir metas futuras?**
+`src/modeling/municipal_metas.py` + `run_municipal_metas.py`:
+RandomForest treinado em 2024 (usando indicadores de 2023), testado em
+2025 (usando indicadores de 2024) -- split temporal genuíno, válido
+porque `CO_MUNICIPIO` é o código IBGE oficial (estável entre anos, ao
+contrário de `ID_ALUNO`/`ID_ESCOLA` -- ver "Limitações do projeto").
+AUC = 0,660. Na classe que importa pra política pública (município que
+**não** vai bater a meta, 28,7% da base de teste): precisão 40% (quase o
+dobro da taxa-base de 28,7%) e recall 51% -- modesto, mas real e
+diretamente aplicável a priorização.
+
+**5. Quais variáveis possuem maior influência nos modelos?** Mesma
+resposta da pergunta 1 -- o SHAP dos dois modelos é a ferramenta usada;
+ver `reports/shap_importancia.csv` (aluno) e
+`reports/municipal_metas_shap_importancia.csv` (município).
+
 ## Descrição da base utilizada
 
 Base a nível de aluno (`FT_MACHINE_LEARNING`, ~6,09 milhões de linhas,

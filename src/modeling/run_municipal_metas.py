@@ -22,8 +22,13 @@ SHAP_REPORT_PATH = c.BASE_DIR / "reports" / "municipal_metas_shap_importancia.cs
 
 CLASSIFICADORES = {
     "LogisticRegression": lambda: LogisticRegression(max_iter=1000),
+    # Hiperparametros otimizados via GridSearchCV + 5-fold CV no treino
+    # (2024) -- ver run_municipal_metas_tuning.py. max_depth=None soou
+    # arriscado a princípio, mas validado no teste (2025, nunca visto na
+    # busca): recall na classe de risco sobe de 51% pra 64% sem perder
+    # precisao.
     "RandomForest": lambda: RandomForestClassifier(
-        n_estimators=300, max_depth=6, min_samples_leaf=20, n_jobs=-1, random_state=42,
+        n_estimators=300, max_depth=None, min_samples_leaf=20, n_jobs=-1, random_state=42,
     ),
 }
 

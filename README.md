@@ -55,7 +55,7 @@ anos com meta batida, 2ª pior taxa do país). "Risco de não bater a meta"
 e "baixo desempenho absoluto" são coisas diferentes. A pontuação foi
 validada contra o `INDICE_RISCO_ESTRUTURAL` já existente (calculado de
 forma independente, só pela distribuição de níveis de proficiência):
-correlação de 0,341, coerente com duas métricas relacionadas mas distintas.
+correlação de 0,314, coerente com duas métricas relacionadas mas distintas.
 
 **3. Quais regiões possuem padrões semelhantes?**
 `src/modeling/run_municipal_clustering.py` agrupa os municípios (K-Means,
@@ -77,10 +77,12 @@ RandomForest treinado em 2024 (usando indicadores de 2023), testado em
 2025 (usando indicadores de 2024) -- split temporal genuíno, válido
 porque `CO_MUNICIPIO` é o código IBGE oficial (estável entre anos, ao
 contrário de `ID_ALUNO`/`ID_ESCOLA` -- ver "Limitações do projeto").
-AUC = 0,660. Na classe que importa pra política pública (município que
-**não** vai bater a meta, 28,7% da base de teste): precisão 40% (quase o
-dobro da taxa-base de 28,7%) e recall 51% -- modesto, mas real e
-diretamente aplicável a priorização.
+Hiperparâmetros otimizados via `GridSearchCV` + 5-fold CV no treino (ver
+`run_municipal_metas_tuning.py` e "Escolha do algoritmo"): AUC = 0,663.
+Na classe que importa pra política pública (município que **não** vai
+bater a meta, 28,7% da base de teste): precisão 40% (quase o dobro da
+taxa-base de 28,7%) e **recall 64%** (subiu de 51% com o tuning, sem
+perder precisão) -- real e diretamente aplicável a priorização.
 
 **5. Quais variáveis possuem maior influência nos modelos?** Mesma
 resposta da pergunta 1 -- o SHAP dos dois modelos é a ferramenta usada;
@@ -107,7 +109,7 @@ cobrindo os 3 anos.
 - [x] Tratamento de valores faltantes e leakage — `src/modeling/features.py`
 - [x] Feature engineering e encoding — `src/modeling/pipeline.py`
 - [x] Pipeline sklearn (pré-processamento + modelo) — `src/modeling/pipeline.py`
-- [x] Treinamento, validação e otimização — `src/modeling/run_baseline.py` (split em `src/modeling/split.py`: só ano de 2025, 70/30 aleatório estratificado por `TARGET`)
+- [x] Treinamento, validação e otimização — `src/modeling/run_baseline.py` (split em `src/modeling/split.py`: só ano de 2025, 70/30 aleatório estratificado por `TARGET`); otimização de hiperparâmetros via `GridSearchCV` + 5-fold CV no modelo municipal — `src/modeling/run_municipal_metas_tuning.py`
 
 ## Escolha do algoritmo
 
@@ -120,6 +122,21 @@ enriquecimento** venceu em todas as métricas (ver tabela abaixo) e foi o
 único cenário que superou a acurácia de "sempre prever a classe
 majoritária" no teste. Escolhido por ser o melhor resultado e por permitir
 a interpretação via SHAP (Seção "Interpretação dos resultados").
+
+**Modelo municipal** (pergunta 4 da estratégia, `src/modeling/municipal_metas.py`):
+mesma comparação `LogisticRegression` x `RandomForestClassifier`, com o
+RandomForest vencendo de novo. Aqui os hiperparâmetros foram otimizados
+com `GridSearchCV` + validação cruzada estratificada de 5 folds no
+conjunto de treino (`n_estimators`, `max_depth`, `min_samples_leaf` --
+36 combinações, ver `src/modeling/run_municipal_metas_tuning.py`).
+**Achado metodológico relevante**: a CV reportou AUC médio de 0,772 no
+treino, mas o modelo escolhido só chegou a 0,663 no teste real (2025,
+nunca visto durante a busca) — uma diferença grande entre a validação
+cruzada dentro do mesmo ano (2024) e a generalização pra um ano seguinte
+de verdade. Reforça por que mantivemos a avaliação final sempre num
+recorte temporal genuíno, não só na CV. Ainda assim, o tuning trouxe
+ganho real: recall na classe de risco subiu de 51% pra 64% sem perder
+precisão (ver "Estratégia do projeto: perguntas de negócio", pergunta 4).
 
 ## Métricas de avaliação
 

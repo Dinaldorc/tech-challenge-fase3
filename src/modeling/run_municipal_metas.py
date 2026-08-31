@@ -12,9 +12,9 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 
+from ..evaluation import evaluate as ev
+from ..evaluation import explain as ex
 from ..preprocessing import commons as c
-from . import evaluate as ev
-from . import explain as ex
 from . import municipal_metas as mm
 
 REPORT_PATH = c.BASE_DIR / "reports" / "municipal_metas_comparison.csv"

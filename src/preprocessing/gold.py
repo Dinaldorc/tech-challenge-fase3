@@ -24,16 +24,20 @@ _ORDEM_CLASSIFICACAO = {
 
 
 def _build_dim_municipio_socioeconomico() -> pd.DataFrame:
-    """Enriquecimento externo por município (Seção 8 da EDA):
-    pobreza (CadÚnico), renda (Censo 2022) e infraestrutura socioeconômica
-    escolar (INSE). Correlação com o TARGET é fraca/moderada (|r| entre
-    0,18 e 0,29) -- entram como candidatas a feature, não como certeza;
-    a decisão de manter/descartar cabe à etapa de modelagem (SHAP).
+    """Enriquecimento externo por município (Seção 8 da EDA, +infraestrutura
+    escolar do Censo Escolar 2025 adicionada depois pra tentar reduzir a
+    degeneração de recall por UF achada no passo 5 da modelagem): pobreza
+    (CadÚnico), renda (Censo 2022), nível socioeconômico escolar (INSE) e
+    % de escolas com biblioteca/laboratório de informática/internet
+    (Censo Escolar). Correlação com o TARGET é fraca/moderada -- entram
+    como candidatas a feature, não como certeza; a decisão de
+    manter/descartar cabe à etapa de modelagem (SHAP).
 
     Fontes esperadas em disco (não versionadas no Git, ver README):
     data/raw/censo_renda/censo2022_renda_per_capita_municipio.csv,
     data/raw/INSE/INSE_2023_escolas.xlsx,
-    data/gold_sample/cadastro_unico_pobreza/CADUNICO_FAMILIAS_POBREZA_MUNICIPIO.csv
+    data/gold_sample/cadastro_unico_pobreza/CADUNICO_FAMILIAS_POBREZA_MUNICIPIO.csv,
+    data/microdados_censo_escolar_2025/dados/_escola_2025_full.parquet
     """
     renda = pd.read_csv(c.RAW_PATH / "censo_renda" / "censo2022_renda_per_capita_municipio.csv")
     dim = renda[["CO_MUNICIPIO", "RENDA_PER_CAPITA_MEDIA"]].copy()
@@ -60,6 +64,26 @@ def _build_dim_municipio_socioeconomico() -> pd.DataFrame:
         cadunico[["CO_MUNICIPIO", "PC_FAMILIAS_POBREZA"]].rename(columns={"CO_MUNICIPIO": "CO_MUNICIPIO_6"}),
         on="CO_MUNICIPIO_6", how="left",
     ).drop(columns=["CO_MUNICIPIO_6"])
+
+    # Censo Escolar 2025 (Tabela_Escola) agregado por municipio: % de
+    # escolas EM ATIVIDADE (TP_SITUACAO_FUNCIONAMENTO == 1) com biblioteca,
+    # laboratorio de informatica e internet para os alunos. ID_ESCOLA da
+    # FT_MACHINE_LEARNING e' uma mascara re-sorteada a cada ano (nao
+    # corresponde a CO_ENTIDADE do Censo Escolar, e nem e' estavel entre
+    # 2023-2025 -- ver notebook de EDA), entao so da' pra agregar por
+    # municipio, nao por escola individual.
+    escola = pd.read_parquet(
+        c.BASE_DIR / "data" / "microdados_censo_escolar_2025" / "dados" / "_escola_2025_full.parquet",
+        columns=["CO_MUNICIPIO", "TP_SITUACAO_FUNCIONAMENTO", "IN_BIBLIOTECA",
+                 "IN_LABORATORIO_INFORMATICA", "IN_INTERNET_ALUNOS"],
+    )
+    escola_ativas = escola[escola["TP_SITUACAO_FUNCIONAMENTO"] == 1]
+    escola_municipio = escola_ativas.groupby("CO_MUNICIPIO", as_index=False).agg(
+        PC_ESCOLAS_BIBLIOTECA=("IN_BIBLIOTECA", "mean"),
+        PC_ESCOLAS_LAB_INFORMATICA=("IN_LABORATORIO_INFORMATICA", "mean"),
+        PC_ESCOLAS_INTERNET_ALUNOS=("IN_INTERNET_ALUNOS", "mean"),
+    )
+    dim = dim.merge(escola_municipio, on="CO_MUNICIPIO", how="left")
 
     return dim
 

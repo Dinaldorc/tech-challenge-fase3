@@ -5,7 +5,8 @@
 Alfabetizar toda criança até o final do 2º ano do Ensino Fundamental é meta
 do Compromisso Nacional Criança Alfabetizada, mas o resultado varia muito
 pelo território: nos dados usados aqui, a diferença entre a melhor e a pior
-região chega a ~15 pontos percentuais, e o achado do SHAP (ver "Interpretação
+região chega a ~12 pontos percentuais (dado ponderado -- ver "Insights
+encontrados"), e o achado do SHAP (ver "Interpretação
 dos resultados") mostra que essa desigualdade está concentrada em poucos
 estados específicos, não distribuída de forma difusa entre regiões.
 
@@ -213,8 +214,9 @@ com enriquecimento, split 2025:
 
 ## Insights encontrados
 
-- **Target balanceado**: 52,2% alfabetizados vs. 47,8% não alfabetizados — não requer balanceamento artificial (SMOTE/undersampling).
-- **Desigualdade regional**: ~15 pontos percentuais de diferença entre a melhor região (Centro-Oeste, 57,5%) e a pior (Norte, 42,2%).
+- **Peso amostral (achado desta revisão, corrige todos os percentuais abaixo)**: o INEP pondera o Indicador Criança Alfabetizada oficial pelo peso por aluno `VL_PESO_ALUNO_LP` (presente na `TS_ALUNO`, mas não aplicado nas versões anteriores deste README). Contagem simples de linhas mostra 54,0% de alfabetizados; ponderado corretamente, **61,1%** — validado cruzando `TS_ESTADO` (rede Total: Estadual+Municipal) com a nota técnica oficial do INEP/Todos Pela Educação (ICA 2025 = 66% nacional): bate quase exato em 26 de 27 estados (exceção: Santa Catarina, possível revisão de dados entre bases). Ver `notebooks/01_EDA_Alfabetizacao.ipynb`, Seção 2.
+- **Target balanceado**: 61,1% alfabetizados vs. 38,9% não alfabetizados (ponderado) — não requer balanceamento artificial (SMOTE/undersampling).
+- **Desigualdade regional**: ~12 pontos percentuais de diferença entre a melhor região (Centro-Oeste, 66,0%) e a pior (Norte, 53,9%) -- ponderado, rede pública. Por UF a disparidade é bem maior: 44pp entre Ceará (84,5%, isolado no topo) e Sergipe (40,1%, pior do país) -- CE e SE estão na mesma região (Nordeste), que mascara essa disparidade quando agregada. Ver Seção 5 da EDA.
 - **Rede**: base majoritariamente municipal (87%); amostra da rede privada é irrisória (25 alunos) e não deve ser usada para conclusões.
 - **Data leakage crítico identificado na EDA**: `TARGET` é 100% determinístico a partir de `VL_PROFICIENCIA_LP >= 743` (sem exceções) e de flags de participação na prova. Essas variáveis (e derivadas) foram excluídas do conjunto de features de modelagem — ver `notebooks/01_EDA_Alfabetizacao.ipynb`, seção 7.
 - Agregados municipais/estaduais (`PC_ALUNO_ALFABETIZADO*`, `VL_MEDIA_LP*`) têm vazamento parcial (incluem o próprio aluno no cálculo) e devem ser usados com cautela ou recalculados como *leave-one-out*.
@@ -234,6 +236,8 @@ com enriquecimento, split 2025:
 - **Degeneração de recall por UF (achado central da modelagem, persiste em toda tentativa de correção)**: em 59% das UFs (16 de 27) o modelo sempre prevê "alfabetizado", independente do aluno. Testamos 3 correções (split aleatório em vez de temporal, adicionar infraestrutura escolar por município, ambas documentadas em "Métricas de avaliação") e nenhuma resolveu — a causa é estrutural: nenhuma feature disponível varia por aluno dentro do mesmo município/rede, então ~340 alunos em média compartilham a mesma previsão. **Este modelo não deve ser usado para decisões de política pública individual** (ver "Aplicação prática" e "Evoluções futuras").
 - **Modelagem restrita ao ano de 2025** (split aleatório 70/30, ver `src/modeling/split.py`): descartamos o split temporal (2023-2024 → 2025) usado numa primeira versão porque a taxa real de alfabetização mudava entre os recortes (51,3% vs. 58,6%), misturando "o modelo generaliza mal" com "o mundo mudou entre os anos". O trade-off é não testar a capacidade do modelo de prever um ano futuro nunca visto — só validamos generalização dentro do mesmo ano.
 - **`ID_ESCOLA` não pode ser usado para trazer sinal por escola**: é uma máscara re-sorteada a cada ano pelo INEP (não é o `CO_ENTIDADE` real usado no Censo Escolar, e nem é estável entre 2023-2025) — fecha a porta pra qualquer enriquecimento por escola individual com os dados públicos disponíveis.
+- **Peso amostral não aplicado nas features/target do modelo**: corrigimos os percentuais *descritivos* da EDA (Seção 2 e 5) para usar `VL_PESO_ALUNO_LP`, mas os modelos supervisionados (aluno e municipal) ainda treinam com peso implícito igual por linha — corrigir isso exigiria re-treinar tudo com `sample_weight`, item em aberto (ver "Evoluções futuras").
+- **Santa Catarina**: nossos dados brutos de 2025 mostram SC subindo (62,0% → 63,2%), mas a nota técnica oficial do INEP/Todos Pela Educação reporta queda pra 59% naquele ano (um dos únicos 2 estados que pioraram) — possível revisão de dados entre a base que baixamos e o número final publicado pelo INEP. Qualquer leitura específica sobre SC nos nossos dados deve considerar essa divergência.
 
 ## Aplicação prática para políticas públicas
 
@@ -265,11 +269,13 @@ EDA, Seção 5).
   usando `SG_UF` como grupo protegido — mas o teto real só sobe com uma
   fonte de dado que varie dentro do município (não temos uma disponível,
   ver limitação sobre `ID_ESCOLA`).
+- **Re-treinar os modelos com `sample_weight=VL_PESO_ALUNO_LP`** (em andamento, branch `feature/correcao-peso-amostral`): os percentuais descritivos da EDA já foram corrigidos pra usar o peso amostral oficial do INEP (ver "Insights encontrados"), mas os modelos supervisionados ainda treinam com peso implícito igual por aluno. Passar o peso pro `.fit()` pode mudar métricas, SHAP e possivelmente até a degeneração por UF -- ainda não sabemos a direção do efeito sem rodar.
 - [x] ~~Revisitar a EDA trazendo a desigualdade regional/por UF excluindo
   a rede privada~~ — feito em `notebooks/01_EDA_Alfabetizacao.ipynb`,
   Seção 5 (branch `feature/eda-desigualdade-regional-sem-privada`): achado
-  de 47pp de disparidade por UF (vs. ~13pp por região) foi o que motivou
-  adicionar a quebra por UF nesta seção.
+  de disparidade por UF bem maior que por região (44pp vs. ~12pp,
+  ponderado -- ver "Insights encontrados") foi o que motivou adicionar a
+  quebra por UF nesta seção.
 - [x] ~~Testar `ID_ESCOLA` via encoding específico~~ — testado e
   descartado: `ID_ESCOLA` é uma máscara re-sorteada a cada ano pelo INEP
   (não corresponde a uma escola real estável), então não carrega

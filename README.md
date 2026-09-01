@@ -42,6 +42,8 @@ estado o que mais pesa é o **desempenho do ano anterior**
 (`DIF_META_ALFABETIZACAO_ANTERIOR`, `PC_ALUNO_ALFABETIZADO_ANTERIOR`) e
 `PC_FAMILIAS_POBREZA` -- ver `reports/municipal_metas_shap_importancia.csv`.
 
+![SHAP do modelo municipal](images/shap_importancia_municipal.png)
+
 **2. Quais municípios apresentam maior risco educacional?**
 `src/modeling/run_municipal_risco.py` pontua cada um dos 5.500 municípios
 com a probabilidade de não bater a meta de alfabetização no próximo
@@ -70,6 +72,8 @@ Piauí/Ceará/Paraíba/Maranhão (82,6% de alfabetização, meta 2030 já
 batida), outro por Bahia/Rio Grande do Norte (52,7%, 27pp longe da meta).
 Ver `reports/municipal_clusters_perfil.csv` e
 `reports/municipal_clusters_x_regiao.csv`.
+
+![Perfil médio por cluster municipal](images/municipal_clusters_perfil.png)
 
 **4. Como prever municípios que podem não atingir metas futuras?**
 `src/modeling/municipal_metas.py` + `run_municipal_metas.py`:
@@ -173,6 +177,8 @@ tunado (linha em negrito) usa os hiperparâmetros otimizados via
 `RandomizedSearchCV` -- ver "Escolha do algoritmo"; é uma melhora real
 sobre a versão anterior sem tuning, AUC 0,6576 vs. 0,6383.)*
 
+![Comparação de baselines -- modelo de aluno](images/baseline_comparison_aluno.png)
+
 **Quebra por região** (melhor modelo — RandomForest tunado + enriquecimento,
 `reports/baseline_metricas_por_regiao.csv`):
 
@@ -188,6 +194,8 @@ O recall agora varia de forma bem mais gradual entre regiões (64% a 99%,
 em vez de 85-100% quase uniforme antes do tuning) — sinal de que o modelo
 está discriminando alunos de verdade, não só reproduzindo a média do grupo.
 
+![Recall por região -- modelo de aluno](images/recall_por_regiao_aluno.png)
+
 **Quebra por UF** (mesmo modelo, `reports/baseline_metricas_por_uf.csv`):
 a degeneração caiu de **18/27 (67%) pra 8/27 (30%)**. As 8 que restam
 degeneradas (recall = 1,0: DF, MA, MT, PR, ES, GO, PI, CE) são justamente
@@ -196,8 +204,9 @@ prever "alfabetizado" quase sempre já é próximo do correto por construção,
 então o problema ali é menos grave do que nos 18 anteriores (que incluíam
 estados medianos como RS, SP, RJ, onde o modelo realmente não conseguia
 diferenciar nada). Nas 19 UFs não degeneradas, o recall varia de forma
-genuína (24% em RN a 98% em PE) — ver `reports/baseline_metricas_por_uf.csv`
-e a imagem `images/recall_por_uf_aluno.png`.
+genuína (24% em RN a 98% em PE) — ver `reports/baseline_metricas_por_uf.csv`.
+
+![Recall por UF -- modelo de aluno](images/recall_por_uf_aluno.png)
 
 **Teste adicional: infraestrutura escolar (Censo Escolar 2025), com o
 modelo tunado.** Somar `PC_ESCOLAS_BIBLIOTECA`, `PC_ESCOLAS_LAB_INFORMATICA`
@@ -223,6 +232,8 @@ split 2025, treinado com `sample_weight`:
 | `RENDA_PER_CAPITA_MEDIA` | 0,017 |
 | `MEDIA_INSE` | 0,013 |
 | `TP_DEPENDENCIA` | 0,006 |
+
+![SHAP do modelo de aluno](images/shap_importancia_aluno.png)
 
 - **`SG_UF` domina ainda mais que antes do tuning** (0,088 vs. 0,071) --
   faz sentido: sem limite de profundidade, o modelo tem mais liberdade pra
@@ -349,8 +360,31 @@ nível de município, não de aluno).
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+
+# 1. Reconstrói a camada Gold a partir dos microdados brutos (ver
+#    "Reconstrução da camada Gold" abaixo pra baixar os arquivos primeiro)
+python -m src.preprocessing.run_pipeline
+
+# 2. EDA (leitura interativa)
 jupyter notebook notebooks/
+
+# 3. Modelagem -- aluno
+python -m src.modeling.run_baseline           # baseline: LR x RandomForest, com/sem enriquecimento
+python -m src.modeling.run_baseline_tuning    # RandomizedSearchCV + CV (gera os hiperparâmetros usados acima)
+python -m src.modeling.run_shap               # interpretabilidade (SHAP)
+
+# 4. Modelagem -- município (pergunta 4 da estratégia)
+python -m src.modeling.run_municipal_metas_tuning  # GridSearchCV + CV
+python -m src.modeling.run_municipal_metas         # baseline + SHAP
+python -m src.modeling.run_municipal_risco         # pergunta 2: ranking de risco por município
+python -m src.modeling.run_municipal_clustering    # pergunta 3: clustering regional
+
+# 5. Gera as imagens em images/ a partir dos reports/*.csv já calculados
+python -m src.visualization.run_visualizations
 ```
+
+Cada comando salva seus resultados em `reports/*.csv` (e `images/*.png` no
+último) — os números citados neste README vêm desses arquivos.
 
 ## Reconstrução da camada Gold (sem depender da AWS da Fase 2)
 
@@ -405,7 +439,7 @@ Um integrante do grupo exportou parte da camada Gold real (S3 da Fase 2) e compa
 Isso gera, em `data/bronze/`, `data/silver/` e `data/gold/`, as mesmas 4
 tabelas Gold do projeto original:
 
-- **`FT_MACHINE_LEARNING`** — base a nível de aluno (~2,1 milhões de linhas), com `TARGET = IN_ALFABETIZADO` e features de posição relativa ao município/estado. **Esta é a tabela usada para treinar o modelo da Fase 3.**
+- **`FT_MACHINE_LEARNING`** — base a nível de aluno (~6,09 milhões de linhas, 2023-2025), com `TARGET = IN_ALFABETIZADO` e features de posição relativa ao município/estado. **Esta é a tabela usada para treinar o modelo da Fase 3** (a etapa de modelagem em si usa só o recorte de 2025 -- ver "Descrição da base utilizada").
 - `FT_INDICADOR_MUNICIPIO` — indicador por município com metas, tendência (`Melhorou`/`Piorou`/`Estável`) e classificação por nível.
 - `FT_INDICADOR_MUNICIPIO_META_VS_RESULTADO` — resultado observado vs. meta oficial por município.
 - `ANALISE_NIVEIS_MUNICIPIO` — perfil de distribuição dos alunos entre níveis de proficiência, com índices de polarização e risco estrutural.

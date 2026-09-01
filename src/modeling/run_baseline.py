@@ -2,7 +2,9 @@
 Compara baselines de modelagem -- LogisticRegression x RandomForest, com e
 sem o enriquecimento socioeconômico (CadÚnico/Censo/INSE, Seção 8 da EDA)
 -- usando o split do passo 2 (só ano de 2025, 70/30 aleatório estratificado
-por TARGET -- ver split.py).
+por TARGET -- ver split.py). Treino e avaliação usam `sample_weight` (peso
+amostral oficial do INEP, `VL_PESO_ALUNO_LP`) -- ver branch
+feature/correcao-peso-amostral e `features.select_weights`.
 
 python -m src.modeling.run_baseline
 """
@@ -34,6 +36,9 @@ def run() -> pd.DataFrame:
     df = c.read_table(c.GOLD_PATH, c.FT_MACHINE_LEARNING)
     train_df, test_df = sp.split_2025(df)
 
+    w_train = feat.select_weights(train_df)
+    w_test = feat.select_weights(test_df)
+
     resultados = []
     modelos_ajustados = {}
     for nome, factory in CLASSIFICADORES.items():
@@ -42,8 +47,8 @@ def run() -> pd.DataFrame:
             X_test, y_test = feat.select_features(test_df, include_socioeconomico=include_socio)
 
             model = pl.build_pipeline(factory(), include_socioeconomico=include_socio)
-            model.fit(X_train, y_train)
-            metrics = ev.evaluate_model(model, X_test, y_test)
+            model.fit(X_train, y_train, classifier__sample_weight=w_train)
+            metrics = ev.evaluate_model(model, X_test, y_test, sample_weight=w_test)
             metrics["modelo"] = nome
             metrics["enriquecimento_socioeconomico"] = include_socio
             resultados.append(metrics)
@@ -69,13 +74,13 @@ def run() -> pd.DataFrame:
     model, X_test, y_test = modelos_ajustados[melhor]
 
     print(f"\nMelhor cenario ({melhor[0]}, socioeconomico={melhor[1]}) -- metricas por regiao:")
-    regiao_df = ev.evaluate_by_group(model, X_test, y_test, "REGIAO")
+    regiao_df = ev.evaluate_by_group(model, X_test, y_test, "REGIAO", sample_weight=w_test)
     print(regiao_df.to_string(index=False))
     regiao_df.to_csv(REGIAO_REPORT_PATH, index=False)
     print(f"Quebra por regiao salva em {REGIAO_REPORT_PATH}")
 
     print(f"\nMelhor cenario ({melhor[0]}, socioeconomico={melhor[1]}) -- metricas por UF:")
-    uf_df = ev.evaluate_by_group(model, X_test, y_test, "SG_UF")
+    uf_df = ev.evaluate_by_group(model, X_test, y_test, "SG_UF", sample_weight=w_test)
     print(uf_df.to_string(index=False))
     uf_df.to_csv(UF_REPORT_PATH, index=False)
     print(f"Quebra por UF salva em {UF_REPORT_PATH}")
@@ -88,9 +93,9 @@ def run() -> pd.DataFrame:
     X_train_i, y_train_i = feat.select_features(train_df, include_socioeconomico=True, include_infraestrutura=True)
     X_test_i, y_test_i = feat.select_features(test_df, include_socioeconomico=True, include_infraestrutura=True)
     model_infra = pl.build_pipeline(factory_melhor(), include_socioeconomico=True, include_infraestrutura=True)
-    model_infra.fit(X_train_i, y_train_i)
-    metrics_infra = ev.evaluate_model(model_infra, X_test_i, y_test_i)
-    uf_infra_df = ev.evaluate_by_group(model_infra, X_test_i, y_test_i, "SG_UF")
+    model_infra.fit(X_train_i, y_train_i, classifier__sample_weight=w_train)
+    metrics_infra = ev.evaluate_model(model_infra, X_test_i, y_test_i, sample_weight=w_test)
+    uf_infra_df = ev.evaluate_by_group(model_infra, X_test_i, y_test_i, "SG_UF", sample_weight=w_test)
     n_zero_i, n_full_i = (uf_infra_df["recall"] == 0).sum(), (uf_infra_df["recall"] >= 0.99).sum()
 
     print(

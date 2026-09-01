@@ -124,93 +124,96 @@ a interpretação via SHAP (Seção "Interpretação dos resultados").
 ## Métricas de avaliação
 
 Split: só ano de 2025 (2.222.792 linhas), 70/30 aleatório estratificado por
-`TARGET` — treino com 1.555.954 linhas, teste com 666.838, **58,6% de
-alfabetizados nos dois lados** (por construção, elimina o *dataset shift*
-que um split temporal por ano introduziria).
+`TARGET` — treino com 1.555.954 linhas, teste com 666.838. **Treino e
+métricas usam `sample_weight=VL_PESO_ALUNO_LP`** (peso amostral oficial do
+INEP -- ver "Insights encontrados" e branch `feature/correcao-peso-amostral`);
+com o peso aplicado, 58,9% dos alunos ponderados do teste são alfabetizados
+(era 58,6% sem peso -- praticamente igual, porque o peso varia pouco entre
+alunos avaliados dentro do mesmo ano).
 
 | Modelo | Enriquecimento | Acurácia | Precisão | Recall | F1 | ROC-AUC |
 |---|---|---|---|---|---|---|
-| LogisticRegression | não | 0,5962 | 0,6086 | 0,8717 | 0,7168 | 0,6085 |
-| LogisticRegression | sim | 0,5960 | 0,6117 | 0,8506 | 0,7117 | 0,6142 |
-| RandomForest | não | 0,5920 | 0,5952 | 0,9508 | 0,7321 | 0,6086 |
-| **RandomForest** | **sim** | **0,6126** | **0,6134** | 0,9172 | 0,7351 | **0,6402** |
+| LogisticRegression | não | 0,5979 | 0,6115 | 0,8690 | 0,7179 | 0,6079 |
+| LogisticRegression | sim | 0,5966 | 0,6125 | 0,8566 | 0,7143 | 0,6136 |
+| RandomForest | não | 0,5947 | 0,5981 | 0,9500 | 0,7340 | 0,6079 |
+| **RandomForest** | **sim** | **0,6109** | **0,6102** | 0,9383 | 0,7395 | **0,6383** |
 
-*(baseline de "sempre prever a classe majoritária" no teste = 0,5862 de
-acurácia — ver `reports/baseline_comparison.csv`)*
+*(baseline de "sempre prever a classe majoritária", ponderado, no teste =
+0,5886 de acurácia — ver `reports/baseline_comparison.csv`. Números quase
+idênticos aos da versão sem peso -- a correção do Nível 1 mudou os
+percentuais *descritivos* da EDA em ~7pp, mas o modelo em si mal se move,
+porque o peso amostral varia pouco entre os alunos efetivamente avaliados
+dentro de um mesmo ano/UF.)*
 
 **Quebra por região** (melhor modelo — RandomForest + enriquecimento,
 `reports/baseline_metricas_por_regiao.csv`):
 
-| Região | Taxa real de alfabetização | Acurácia | Precisão | Recall |
+| Região | Taxa real de alfabetização (ponderada) | Acurácia | Precisão | Recall |
 |---|---|---|---|---|
-| Norte | 52,0% | 0,5385 | 0,5314 | 0,9447 |
-| Sudeste | 57,3% | 0,5975 | 0,5983 | 0,9056 |
-| Sul | 58,7% | 0,6374 | 0,6433 | 0,8569 |
-| Nordeste | 60,8% | 0,6348 | 0,6371 | 0,9275 |
-| Centro-Oeste | 66,5% | 0,6655 | 0,6654 | 0,9999 |
+| Norte | 52,8% | 0,5411 | 0,5364 | 0,9620 |
+| Sudeste | 57,7% | 0,5923 | 0,5899 | 0,9623 |
+| Sul | 58,9% | 0,6408 | 0,6486 | 0,8519 |
+| Nordeste | 60,6% | 0,6327 | 0,6359 | 0,9213 |
+| Centro-Oeste | 67,0% | 0,6702 | 0,6700 | 0,9999 |
 
-Diferente do split temporal (versão anterior), o recall não colapsa mais
-numa região específica — mas fica alto (85-100%) em todas, sinal de que o
-modelo está enviesado para prever "alfabetizado" com mais frequência que
-deveria (ver quebra por UF abaixo, mais reveladora).
+Continua o mesmo padrão de antes do peso: o recall não colapsa por região,
+mas fica alto (85-100%) em todas — o modelo está enviesado pra prever
+"alfabetizado" com mais frequência que deveria (ver quebra por UF).
 
 **Quebra por UF** (mesmo modelo, `reports/baseline_metricas_por_uf.csv`)
-continua degenerada, e mudou de padrão: **16 das 27 UFs (59%)** têm recall
-**exatamente 1,0** (TO, DF, AC, RO, MS, AL, PE, MA, PB, MG, PR, MT, ES, GO,
-PI, CE) — o modelo *sempre* prevê "alfabetizado" nessas UFs — contra
-nenhuma UF com recall 0 desta vez. Ou seja, a mudança de split (temporal →
-aleatório 2025) **não resolveu a degeneração — ela piorou** (59% vs. 44%
-das UFs antes), só trocou de direção (antes tinha UFs travadas em "nunca
-alfabetizado" e outras em "sempre alfabetizado"; agora é quase só "sempre
-alfabetizado"). Confirma que o problema é estrutural (granularidade das
-features), não do desenho do split — ver "Interpretação dos resultados".
+com peso amostral: **18 das 27 UFs (67%)** têm recall degenerado (0 ou
+≥99%) — pior que sem peso (16/27, 59%) e pior que o cenário original com
+split temporal (12/27, 44%). Ou seja, **aplicar o peso amostral correto
+também não resolveu a degeneração — se manteve no mesmo patamar,
+oscilando entre 44% e 67% conforme o ajuste testado (split, profundidade
+da árvore, infraestrutura, peso amostral)**. Essa é a 4ª correção testada
+que não resolve o problema — reforça com ainda mais força a conclusão
+estrutural: nenhuma feature disponível varia por aluno, então nenhum ajuste
+metodológico no split/peso/hiperparâmetro consegue dar ao modelo o que ele
+não tem (ver "Interpretação dos resultados").
 
-**Teste adicional: infraestrutura escolar (Censo Escolar 2025).** Testamos
-somar `PC_ESCOLAS_BIBLIOTECA`, `PC_ESCOLAS_LAB_INFORMATICA` e
-`PC_ESCOLAS_INTERNET_ALUNOS` (% de escolas em atividade no município com
-cada recurso) ao melhor cenário. Resultado: acurácia 0,6112, F1 0,7365,
-AUC 0,6425 (leve melhora de AUC) mas **19/27 UFs degeneradas** (pior que
-sem essa adição) — mais uma confirmação de que, sendo uma feature no mesmo
-nível de granularidade municipal das outras 3, não ataca a causa raiz.
+**Teste adicional: infraestrutura escolar (Censo Escolar 2025), com peso.**
+Somar `PC_ESCOLAS_BIBLIOTECA`, `PC_ESCOLAS_LAB_INFORMATICA` e
+`PC_ESCOLAS_INTERNET_ALUNOS` ao melhor cenário: acurácia 0,6098, F1 0,7405,
+AUC 0,6405 (praticamente igual) mas **20/27 UFs degeneradas** — pior ainda.
 Ver `reports/baseline_metricas_por_uf_com_infraestrutura.csv`.
 
 ## Interpretação dos resultados
 
 SHAP (`TreeExplainer`, amostra de 20 mil linhas do teste — ver
 `src/modeling/explain.py` e `reports/shap_importancia.csv`) no RandomForest
-com enriquecimento, split 2025:
+com enriquecimento, split 2025, **modelo treinado com `sample_weight`**:
 
 | Variável | Importância média (\|SHAP\|) |
 |---|---|
-| `SG_UF` | 0,069 |
+| `SG_UF` | 0,071 |
 | `PC_FAMILIAS_POBREZA` | 0,024 |
-| `REGIAO` | 0,018 |
-| `RENDA_PER_CAPITA_MEDIA` | 0,010 |
+| `REGIAO` | 0,017 |
+| `RENDA_PER_CAPITA_MEDIA` | 0,009 |
 | `MEDIA_INSE` | 0,007 |
 | `TP_DEPENDENCIA` | 0,003 |
 
-- **`SG_UF` ainda domina, mas com uma margem bem menor** que no split
-  temporal (2,9x `REGIAO` agregada, contra 4,5x antes) — puxado
-  principalmente por `SG_UF=CE`, o único estado que sozinho (0,013) chega
-  perto de `PC_FAMILIAS_POBREZA` (0,024).
-- **`PC_FAMILIAS_POBREZA` agora é a 2ª variável mais importante do modelo
-  isoladamente** — na frente até da `REGIAO` inteira somada (0,024 vs.
-  0,018) e de qualquer UF individual exceto `CE`. Com o split anterior ela
-  ficava atrás de `SG_UF=CE` e `SG_UF=BA` juntas; aqui é a que mais pesa
-  depois do estado. Reforça a decisão de manter as features
-  socioeconômicas mesmo com correlação linear fraca a nível de aluno
-  (Seção 8 da EDA).
-- **A disparidade regional continua identificável, mas mais amena**: o
-  efeito médio (com sinal) de `REGIAO=Norte` é -0,017 (era -0,037 no split
-  anterior) — segue sendo o mais negativo, mas a distância pras demais
-  regiões caiu. Ver `reports/shap_efeito_regiao.csv`.
-- **A degeneração por UF piorou apesar da importância de `SG_UF` cair
-  relativamente** (passo de 44% pra 59% das UFs) — evidência de que a
-  causa não é só "o modelo dá peso demais a `SG_UF`", é a combinação de
-  poucas features com granularidade municipal/estadual e um limiar de
-  decisão fixo (0,5) que, nesse recorte, acaba quase sempre acima de 0,5
-  na maioria dos estados (ver "Métricas de avaliação" — recall de 85-100%
-  em todas as regiões).
+**Com peso amostral, o SHAP fica quase idêntico ao sem peso** (`SG_UF`
+0,071 vs. 0,069 antes; `PC_FAMILIAS_POBREZA` 0,024 nos dois) — o peso varia
+pouco entre alunos avaliados do mesmo ano/UF, então não muda a hierarquia
+de importância nem a interpretação:
+
+- **`SG_UF` ainda domina** — puxado principalmente por `SG_UF=CE` (0,013,
+  a única UF que sozinha chega perto de `PC_FAMILIAS_POBREZA`).
+- **`PC_FAMILIAS_POBREZA` continua a 2ª variável mais importante do modelo
+  isoladamente** — na frente da `REGIAO` inteira somada (0,024 vs. 0,017).
+  Reforça a decisão de manter as features socioeconômicas mesmo com
+  correlação linear fraca a nível de aluno (Seção 8 da EDA).
+- **A disparidade regional continua identificável**: o efeito médio (com
+  sinal) de `REGIAO=Norte` é -0,016, o mais negativo entre as 5 regiões.
+  Ver `reports/shap_efeito_regiao.csv`.
+- **A degeneração por UF variou entre 44% e 67% conforme testamos split,
+  profundidade, infraestrutura e peso amostral, sem nenhuma correção
+  eliminá-la** — evidência forte de que a causa é estrutural (poucas
+  features, todas de granularidade municipal/estadual, e um limiar de
+  decisão fixo de 0,5 que a maioria dos estados fica sistematicamente
+  acima ou abaixo), não um artefato de uma escolha metodológica específica
+  (ver "Métricas de avaliação").
 
 ## Insights encontrados
 
@@ -224,9 +227,10 @@ com enriquecimento, split 2025:
 - **`DESEMPENHO_RELATIVO` também é leakage** (derivado de `DIF_MEDIA_ESTADO`, que vem de `VL_PROFICIENCIA_LP`) e não estava na lista original da EDA — encontrado ao formalizar a seleção de features em código (`src/modeling/features.py`).
 - **`ID_ALUNO` e `ID_ESCOLA` não são identificadores persistentes entre anos**: as faixas numéricas se repetem quase idênticas em 2023/2024/2025 e, dos "mesmos" códigos que aparecem em anos diferentes, praticamente 0% correspondem à mesma escola/mesmo município — são IDs re-sorteados a cada ano (o dicionário oficial do INEP confirma: `ID_ESCOLA` é "máscara do código da escola, códigos fictícios"), não registros nacionais estáveis. Isso fecha a porta pra usar `ID_ESCOLA` via encoding como fonte de sinal individual (`CO_ENTIDADE` do Censo Escolar, que é o código real, também não bate: 0% de correspondência testada).
 - **Nenhuma feature disponível varia por aluno**: com as 7 features atuais (`REGIAO`, `SG_UF`, `TP_DEPENDENCIA` + 3 socioeconômicas por município), os 2.222.792 alunos de 2025 colapsam em só ~6.500 combinações únicas de valores — em média, **~340 alunos compartilham exatamente a mesma linha de entrada**. O modelo não pode, por construção, diferenciar esses alunos entre si; só pode prever por grupo.
-- **Sem o enriquecimento externo, o modelo mal supera prever a classe majoritária** (`REGIAO`/`SG_UF`/`TP_DEPENDENCIA` sozinhos: acurácia 0,592-0,596 vs. baseline de 0,586) — quase todo o sinal individual forte foi removido como leakage, então o que resta é fraco por natureza.
-- **O modelo tem recall degenerado por UF** (sempre prevê a mesma classe pra 59% dos estados) — ver "Interpretação dos resultados".
+- **Sem o enriquecimento externo, o modelo mal supera prever a classe majoritária** (`REGIAO`/`SG_UF`/`TP_DEPENDENCIA` sozinhos: acurácia 0,595-0,598 vs. baseline ponderado de 0,589) — quase todo o sinal individual forte foi removido como leakage, então o que resta é fraco por natureza.
+- **O modelo tem recall degenerado por UF** (sempre prevê a mesma classe pra 67% dos estados, com `sample_weight` -- ver "Interpretação dos resultados").
 - **Agregar infraestrutura escolar (Censo Escolar) por município não resolveu a degeneração** — é a mesma granularidade municipal das outras 3 features, então não ataca a causa raiz (falta de variação por aluno).
+- **Nem treinar com `sample_weight=VL_PESO_ALUNO_LP` resolveu a degeneração** (4ª tentativa, branch `feature/sample-weight-modelo-aluno`): métricas gerais ficaram quase idênticas às sem peso (AUC 0,638 vs. 0,640), mas a degeneração por UF **piorou** (67% vs. 59% das UFs) -- mais uma confirmação de que o teto é a falta de variação por aluno nas features, não a metodologia de treino.
 
 ## Limitações do projeto
 
@@ -234,10 +238,9 @@ com enriquecimento, split 2025:
 - Amostra da rede privada é pequena demais para generalizar.
 - Reconstrução da camada Gold feita localmente (fora do Databricks/AWS original da Fase 2) — ver seção "Reconstrução da camada Gold" abaixo para detalhes e possíveis pequenas diferenças de metodologia.
 - Renda (Censo 2022) e INSE (SAEB 2023) são fotos únicas, repetidas nos 3 anos do painel (2023-2025) — ver "Enriquecimento externo por município" abaixo.
-- **Degeneração de recall por UF (achado central da modelagem, persiste em toda tentativa de correção)**: em 59% das UFs (16 de 27) o modelo sempre prevê "alfabetizado", independente do aluno. Testamos 3 correções (split aleatório em vez de temporal, adicionar infraestrutura escolar por município, ambas documentadas em "Métricas de avaliação") e nenhuma resolveu — a causa é estrutural: nenhuma feature disponível varia por aluno dentro do mesmo município/rede, então ~340 alunos em média compartilham a mesma previsão. **Este modelo não deve ser usado para decisões de política pública individual** (ver "Aplicação prática" e "Evoluções futuras").
-- **Modelagem restrita ao ano de 2025** (split aleatório 70/30, ver `src/modeling/split.py`): descartamos o split temporal (2023-2024 → 2025) usado numa primeira versão porque a taxa real de alfabetização mudava entre os recortes (51,3% vs. 58,6%), misturando "o modelo generaliza mal" com "o mundo mudou entre os anos". O trade-off é não testar a capacidade do modelo de prever um ano futuro nunca visto — só validamos generalização dentro do mesmo ano.
+- **Degeneração de recall por UF (achado central da modelagem, persiste em toda tentativa de correção)**: com `sample_weight`, em 67% das UFs (18 de 27) o modelo sempre prevê "alfabetizado", independente do aluno. Testamos 4 correções (split aleatório em vez de temporal, reduzir `max_depth`, adicionar infraestrutura escolar por município, treinar com peso amostral oficial do INEP -- todas documentadas em "Métricas de avaliação") e **nenhuma resolveu** — a degeneração oscilou entre 44% e 67% das UFs conforme o ajuste, sem tendência de melhora. A causa é estrutural: nenhuma feature disponível varia por aluno dentro do mesmo município/rede, então ~340 alunos em média compartilham a mesma previsão. **Este modelo não deve ser usado para decisões de política pública individual** (ver "Aplicação prática" e "Evoluções futuras").
+- **Modelagem restrita ao ano de 2025** (split aleatório 70/30, ver `src/modeling/split.py`): descartamos o split temporal (2023-2024 → 2025) usado numa primeira versão porque a taxa real de alfabetização mudava entre os recortes, misturando "o modelo generaliza mal" com "o mundo mudou entre os anos". O trade-off é não testar a capacidade do modelo de prever um ano futuro nunca visto — só validamos generalização dentro do mesmo ano.
 - **`ID_ESCOLA` não pode ser usado para trazer sinal por escola**: é uma máscara re-sorteada a cada ano pelo INEP (não é o `CO_ENTIDADE` real usado no Censo Escolar, e nem é estável entre 2023-2025) — fecha a porta pra qualquer enriquecimento por escola individual com os dados públicos disponíveis.
-- **Peso amostral não aplicado nas features/target do modelo**: corrigimos os percentuais *descritivos* da EDA (Seção 2 e 5) para usar `VL_PESO_ALUNO_LP`, mas os modelos supervisionados (aluno e municipal) ainda treinam com peso implícito igual por linha — corrigir isso exigiria re-treinar tudo com `sample_weight`, item em aberto (ver "Evoluções futuras").
 
 ## Aplicação prática para políticas públicas
 
@@ -245,7 +248,7 @@ Na forma atual, o modelo serve melhor como **ferramenta exploratória** —
 ex.: cruzar `PC_FAMILIAS_POBREZA`/`MEDIA_INSE`/`RENDA_PER_CAPITA_MEDIA` por
 município pra priorizar visitas técnicas ou repasse de material — do que
 como critério automático de decisão. O comportamento degenerado por UF
-(recall ≈100% em 16 de 27 estados) significa que, se usado para sinalizar
+(recall ≈100% em 18 de 27 estados, com `sample_weight`) significa que, se usado para sinalizar
 "alunos em risco" hoje, o modelo simplesmente **não identificaria quase
 ninguém em risco** nesses estados — prevê "alfabetizado" quase sempre,
 mesmo para os ~40% que não estão. Qualquer uso em política pública exige
@@ -257,19 +260,23 @@ EDA, Seção 5).
 ## Possíveis evoluções futuras
 
 - **Corrigir o comportamento degenerado por UF** continua o item mais
-  urgente. Já testamos e descartamos 3 caminhos: reduzir `max_depth`
+  urgente. Já testamos e descartamos 4 caminhos: reduzir `max_depth`
   (piora tudo — 5/4/3 tiveram mais UFs degeneradas e AUC pior que
   `max_depth=10`), trocar o split temporal por aleatório dentro de 2025
-  (piorou, de 44% pra 59% das UFs) e somar infraestrutura escolar por
-  município (piorou levemente, 19/27). O padrão que emerge: como nenhuma
-  feature varia por aluno, ajustar hiperparâmetro ou split só desloca
-  *onde* a degeneração aparece, não a remove. Caminhos ainda não testados:
-  calibração do limiar de decisão por UF (em vez do 0,5 fixo), ou métricas
-  de otimização sensíveis a fairness por grupo (ex.: equalized odds)
-  usando `SG_UF` como grupo protegido — mas o teto real só sobe com uma
-  fonte de dado que varie dentro do município (não temos uma disponível,
-  ver limitação sobre `ID_ESCOLA`).
-- **Re-treinar os modelos com `sample_weight=VL_PESO_ALUNO_LP`** (em andamento, branch `feature/correcao-peso-amostral`): os percentuais descritivos da EDA já foram corrigidos pra usar o peso amostral oficial do INEP (ver "Insights encontrados"), mas os modelos supervisionados ainda treinam com peso implícito igual por aluno. Passar o peso pro `.fit()` pode mudar métricas, SHAP e possivelmente até a degeneração por UF -- ainda não sabemos a direção do efeito sem rodar.
+  (piorou, de 44% pra 59% das UFs), somar infraestrutura escolar por
+  município (piorou levemente, 59%→63%) e treinar com `sample_weight`
+  oficial do INEP (piorou mais, 59%→67%). O padrão que emerge: como
+  nenhuma feature varia por aluno, ajustar hiperparâmetro, split ou peso
+  amostral só desloca *onde* a degeneração aparece, não a remove. Caminhos
+  ainda não testados: calibração do limiar de decisão por UF (em vez do
+  0,5 fixo), ou métricas de otimização sensíveis a fairness por grupo
+  (ex.: equalized odds) usando `SG_UF` como grupo protegido — mas o teto
+  real só sobe com uma fonte de dado que varie dentro do município (não
+  temos uma disponível, ver limitação sobre `ID_ESCOLA`).
+- [x] ~~Re-treinar os modelos com `sample_weight=VL_PESO_ALUNO_LP`~~ —
+  feito na branch `feature/sample-weight-modelo-aluno`: métricas gerais
+  quase não mudam (AUC 0,638 vs. 0,640 sem peso), mas a degeneração por UF
+  piora (67% vs. 59%) — ver "Métricas de avaliação" e "Insights encontrados".
 - [x] ~~Revisitar a EDA trazendo a desigualdade regional/por UF excluindo
   a rede privada~~ — feito em `notebooks/01_EDA_Alfabetizacao.ipynb`,
   Seção 5 (branch `feature/eda-desigualdade-regional-sem-privada`): achado

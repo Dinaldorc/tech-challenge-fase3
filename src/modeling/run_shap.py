@@ -31,7 +31,7 @@ def run() -> None:
         RandomForestClassifier(n_estimators=200, max_depth=10, min_samples_leaf=50, n_jobs=-1, random_state=42),
         include_socioeconomico=True,
     )
-    model.fit(X_train, y_train)
+    model.fit(X_train, y_train, classifier__sample_weight=feat.select_weights(train_df))
 
     shap_values, feature_names, X_sample = ex.compute_shap_values(model, X_test, numeric_cols, categorical_cols)
 

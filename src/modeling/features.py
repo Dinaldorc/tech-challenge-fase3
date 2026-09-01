@@ -10,6 +10,16 @@ import pandas as pd
 
 TARGET_COL = "TARGET"
 
+# Peso amostral oficial do INEP (ver branch feature/correcao-peso-amostral):
+# usado como sample_weight no treino/avaliacao, nunca como feature (fica em
+# LEAKAGE_DIRETO abaixo -- so' existe pra quem foi avaliado, entao o valor
+# em si vazaria participacao). Nulo exatamente para os "nao avaliados"
+# (mesma populacao de VL_PROFICIENCIA_LP nulo, conferido empiricamente) --
+# preenchido com 1.0 (peso neutro) porque o INEP nao define um peso pra
+# quem nao fez a prova, e o TARGET desses alunos ja segue a convencao
+# oficial de contar como "nao alfabetizado".
+WEIGHT_COL = "VL_PESO_ALUNO_LP"
+
 # Leakage direto: determinístico ou quase-determinístico em relação ao
 # TARGET (derivado de VL_PROFICIENCIA_LP ou das flags de participação na
 # prova -- Seção 7 da EDA). Nunca deve entrar no modelo.
@@ -155,3 +165,9 @@ def select_features(
     X = _sanitize_dtypes(df[cols].copy())
     y = df[TARGET_COL].copy()
     return X, y
+
+
+def select_weights(df: pd.DataFrame) -> pd.Series:
+    """Peso amostral (`VL_PESO_ALUNO_LP`) pronto pra usar como
+    `sample_weight` em `.fit()`/métricas -- ver nota em `WEIGHT_COL`."""
+    return df[WEIGHT_COL].fillna(1.0).astype("float64")

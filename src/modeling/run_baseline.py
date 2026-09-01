@@ -26,8 +26,14 @@ UF_INFRA_REPORT_PATH = c.BASE_DIR / "reports" / "baseline_metricas_por_uf_com_in
 
 CLASSIFICADORES = {
     "LogisticRegression": lambda: LogisticRegression(max_iter=1000),
+    # Hiperparametros otimizados via RandomizedSearchCV + 3-fold CV numa
+    # amostra de 300 mil linhas do treino -- ver run_baseline_tuning.py.
+    # max_depth=None (sem limite) + min_samples_leaf=98 (bem mais alto que
+    # o 50 testado manualmente antes) reduziu a degeneracao por UF de
+    # 18/27 pra 8/27 -- combinacao que os testes manuais anteriores
+    # (max_depth 3/4/5/10, sempre com limite) nunca tinham coberto.
     "RandomForest": lambda: RandomForestClassifier(
-        n_estimators=200, max_depth=10, min_samples_leaf=50, n_jobs=-1, random_state=42,
+        n_estimators=148, max_depth=None, min_samples_leaf=98, n_jobs=-1, random_state=42,
     ),
 }
 

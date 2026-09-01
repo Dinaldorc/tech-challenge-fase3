@@ -9,8 +9,8 @@ python -m src.modeling.run_shap
 from __future__ import annotations
 from sklearn.ensemble import RandomForestClassifier
 
+from ..evaluation import explain as ex
 from ..preprocessing import commons as c
-from . import explain as ex
 from . import features as feat
 from . import pipeline as pl
 from . import split as sp

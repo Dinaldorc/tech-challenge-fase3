@@ -11,8 +11,8 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 
+from ..evaluation import evaluate as ev
 from ..preprocessing import commons as c
-from . import evaluate as ev
 from . import features as feat
 from . import pipeline as pl
 from . import split as sp

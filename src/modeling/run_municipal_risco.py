@@ -28,9 +28,11 @@ def run() -> pd.DataFrame:
     # 2025), nao so a fatia de treino do script de validacao -- aqui o
     # objetivo e' pontuar o presente, nao medir generalizacao (isso ja foi
     # validado em run_municipal_metas.py).
+    # Hiperparametros otimizados via GridSearchCV -- ver
+    # run_municipal_metas_tuning.py e a nota em run_municipal_metas.py.
     X_full, y_full = mm.select_features(df)
     model = mm.build_pipeline(
-        RandomForestClassifier(n_estimators=300, max_depth=6, min_samples_leaf=20, n_jobs=-1, random_state=42)
+        RandomForestClassifier(n_estimators=300, max_depth=None, min_samples_leaf=20, n_jobs=-1, random_state=42)
     )
     model.fit(X_full, y_full)
 

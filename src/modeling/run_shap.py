@@ -27,13 +27,20 @@ def run() -> None:
     X_test, _ = feat.select_features(test_df, include_socioeconomico=True)
     numeric_cols, categorical_cols = pl.get_column_types(include_socioeconomico=True)
 
+    # Hiperparametros otimizados -- ver run_baseline_tuning.py e a nota em
+    # run_baseline.py.
     model = pl.build_pipeline(
-        RandomForestClassifier(n_estimators=200, max_depth=10, min_samples_leaf=50, n_jobs=-1, random_state=42),
+        RandomForestClassifier(n_estimators=148, max_depth=None, min_samples_leaf=98, n_jobs=-1, random_state=42),
         include_socioeconomico=True,
     )
     model.fit(X_train, y_train, classifier__sample_weight=feat.select_weights(train_df))
 
-    shap_values, feature_names, X_sample = ex.compute_shap_values(model, X_test, numeric_cols, categorical_cols)
+    # Amostra reduzida (2 mil, era 20 mil): as arvores sem limite de
+    # profundidade (media 35, ~625 mil nos no total) deixam o TreeExplainer
+    # muito mais pesado -- 20 mil linhas nao terminava em tempo viavel.
+    shap_values, feature_names, X_sample = ex.compute_shap_values(
+        model, X_test, numeric_cols, categorical_cols, sample_size=2000,
+    )
 
     print("Importancia media (|SHAP|) por variavel original:")
     variaveis = feat.get_feature_columns(include_socioeconomico=True)

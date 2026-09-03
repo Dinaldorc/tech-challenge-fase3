@@ -97,11 +97,13 @@ ver `reports/shap_importancia.csv` (aluno) e
 
 Base a nível de aluno (`FT_MACHINE_LEARNING`, ~6,09 milhões de linhas,
 2023-2025), reconstruída localmente a partir dos microdados públicos do
-INEP (ver "Reconstrução da camada Gold" abaixo), enriquecida com 3 fontes
+INEP (ver "Reconstrução da camada Gold" abaixo), enriquecida com 4 fontes
 externas por município (ver "Enriquecimento externo por município"
-abaixo): pobreza (CadÚnico), renda per capita (Censo 2022) e nível
-socioeconômico escolar (INSE 2023). Não obtivemos acesso a tempo ao Atlas
-do Desenvolvimento Humano (IDHM) — essas 3 fontes o substituem no projeto.
+abaixo): pobreza (CadÚnico, ref. 08/2026), renda per capita (Censo
+Demográfico 2022 do IBGE, tabela divulgada out/2025), nível socioeconômico
+escolar (INSE, ref. 2023) e infraestrutura escolar (Censo Escolar do
+INEP, ref. 2025). Não obtivemos acesso a tempo ao Atlas do Desenvolvimento
+Humano (IDHM) — essas 4 fontes o substituem no projeto.
 
 **A etapa de modelagem (treino/teste) usa só o ano de 2025** (2.222.792
 linhas) — ver "Limitações do projeto" para o motivo de restringir a
@@ -346,8 +348,9 @@ nível de município, não de aluno).
   `PC_ESCOLAS_INTERNET_ALUNOS`) e o efeito foi nulo/levemente negativo —
   ver "Métricas de avaliação".
 - Obter acesso ao Atlas do Desenvolvimento Humano (IDHM) — não conseguimos
-  a tempo (Atlas Brasil indisponível) e usamos CadÚnico/Censo/INSE como
-  substituto (ver "Enriquecimento externo por município").
+  a tempo (Atlas Brasil indisponível) e usamos CadÚnico/Censo Demográfico/
+  INSE/Censo Escolar como substituto (ver "Enriquecimento externo por
+  município").
 - Teste de outros algoritmos em árvore (XGBoost, LightGBM) agora que o
   pipeline (`src/modeling/pipeline.py`) já injeta qualquer classificador
   sklearn sem mudança de código -- o tuning do RandomForest já foi feito
@@ -457,17 +460,33 @@ versionados no Git** (ver `.gitignore`) — apenas o código que as gera.
 Testamos a hipótese de que municípios mais pobres e com pior infraestrutura
 educacional têm menor taxa de alfabetização (ver `notebooks/01_EDA_Alfabetizacao.ipynb`,
 Seção 8). Não conseguimos acesso ao Atlas do Desenvolvimento Humano (IDHM)
-a tempo (ferramenta do Atlas Brasil indisponível) — as 3 fontes abaixo o
-substituem para este projeto:
+a tempo (ferramenta do Atlas Brasil indisponível) — as 4 fontes abaixo o
+substituem para este projeto. **Ano/mês de referência de cada uma, verificado
+direto no campo interno do arquivo (não só pelo nome da pasta/arquivo)**:
 
-- **Pobreza** — CadÚnico (VIS Data 3), % de famílias na faixa de pobreza do
-  PBF por município (08/2026): `data/gold_sample/cadastro_unico_pobreza/CADUNICO_FAMILIAS_POBREZA_MUNICIPIO.csv`
+- **Pobreza** — CadÚnico (VIS Data 3). Referência: **agosto/2026**
+  (campo `MES_REFERENCIA`) — não é "ano base 2025, divulgado depois", o
+  próprio dado já é a extração mais recente disponível na ferramenta VIS
+  Data 3 no momento em que baixamos. % de famílias na faixa de pobreza do
+  PBF por município:
+  `data/gold_sample/cadastro_unico_pobreza/CADUNICO_FAMILIAS_POBREZA_MUNICIPIO.csv`
   (já incluído no repositório).
-- **Renda** — Censo 2022 (SIDRA, tabela 10295), renda per capita média por
-  município, divulgado em out/2025. Baixe e salve em
+- **Renda** — **Censo Demográfico 2022** do IBGE (SIDRA, tabela 10295) --
+  *diferente do Censo Escolar abaixo, cuidado pra não confundir os dois*.
+  Referência: ano base **2022**, tabela divulgada em out/2025. Renda per
+  capita média por município. Baixe e salve em
   `data/raw/censo_renda/censo2022_renda_per_capita_municipio.csv`.
-- **Infraestrutura socioeconômica escolar** — INSE 2023 (INEP/SAEB), por
-  escola. Baixe e salve em `data/raw/INSE/INSE_2023_escolas.xlsx`.
+- **Nível socioeconômico escolar (INSE)** — INEP/SAEB. Referência:
+  **2023** (campo `NU_ANO_SAEB`), por escola. Baixe e salve em
+  `data/raw/INSE/INSE_2023_escolas.xlsx`.
+- **Infraestrutura escolar** (`PC_ESCOLAS_BIBLIOTECA`, `PC_ESCOLAS_LAB_INFORMATICA`,
+  `PC_ESCOLAS_INTERNET_ALUNOS`) — **Censo Escolar do INEP**, tabela Escola
+  (*diferente do Censo Demográfico do IBGE acima*). Referência: **2025**
+  (campo `NU_ANO_CENSO`, sem defasagem entre coleta e ano base). Baixe e
+  salve em `data/microdados_censo_escolar_2025/dados/_escola_2025_full.parquet`
+  (ver "Estrutura Mínima do Repositório"; adicionado depois do
+  enriquecimento original, ver "Métricas de avaliação" pro teste com essas
+  3 variáveis).
 
 **Atenção ao join:** o CadÚnico usa o código IBGE **sem dígito verificador**
 (6 dígitos, ex.: `120001` para Acrelândia), enquanto `CO_MUNICIPIO` no
@@ -475,8 +494,9 @@ restante do projeto usa o código completo (7 dígitos, ex.: `1200013`). A
 pipeline (`_build_dim_municipio_socioeconomico` em `src/preprocessing/gold.py`)
 já faz essa conversão (`CO_MUNICIPIO // 10`) antes do merge.
 
-**Resultado:** as 3 variáveis (`PC_FAMILIAS_POBREZA`, `RENDA_PER_CAPITA_MEDIA`,
-`MEDIA_INSE`) correlacionam na direção esperada com a taxa de alfabetização
+**Resultado (das 3 primeiras fontes, avaliadas juntas na Seção 8 da EDA):**
+`PC_FAMILIAS_POBREZA`, `RENDA_PER_CAPITA_MEDIA` e `MEDIA_INSE` correlacionam
+na direção esperada com a taxa de alfabetização
 a nível de **município** (|r| entre 0,18 e 0,29), mas a correlação cai bastante
 a nível de **aluno** — a granularidade real de treino da `FT_MACHINE_LEARNING`
 (|r| entre 0,006 e 0,073, praticamente ruído para renda). Isso é esperado
@@ -485,6 +505,9 @@ por indivíduo) e não significa que as features sejam inúteis num modelo
 multivariado — a decisão de manter ou descartar cada uma fica para a etapa
 de modelagem (importância de feature / SHAP), não para a correlação isolada.
 
-**Limitação:** renda (Censo 2022) e INSE (SAEB 2023) são fotos únicas — o
-mesmo valor se repete para um dado município nos 3 anos do painel
-(2023-2025), diferente do CadÚnico que já reflete a referência mais recente.
+**Limitação:** renda (Censo Demográfico 2022), INSE (SAEB 2023) e
+infraestrutura escolar (Censo Escolar 2025) são **fotos únicas** — o mesmo
+valor se repete pra um dado município em todos os anos/transições onde é
+usado (os 3 anos do painel de aluno, 2023-2025; e as 2 transições do modelo
+municipal, 2023→2024 e 2024→2025), diferente do CadÚnico que já reflete a
+referência mais recente (08/2026) disponível no momento da coleta.

@@ -48,6 +48,17 @@ def evaluate_model(
     }
 
 
+def confusion_matrix_df(cm: list[list[float]], labels: tuple = (0, 1)) -> pd.DataFrame:
+    """Formata a `confusion_matrix` de `evaluate_model` (lista de listas,
+    ordem de labels = ordem crescente de `y_test`) como DataFrame legível,
+    pronto pra salvar em CSV ou plotar (ver `charts.matriz_confusao`)."""
+    return pd.DataFrame(
+        cm,
+        index=[f"real_{l}" for l in labels],
+        columns=[f"predito_{l}" for l in labels],
+    )
+
+
 def evaluate_by_group(
     model, X_test: pd.DataFrame, y_test: pd.Series, group_col: str, sample_weight: pd.Series | None = None
 ) -> pd.DataFrame:

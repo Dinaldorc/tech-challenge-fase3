@@ -19,6 +19,7 @@ from . import municipal_metas as mm
 
 REPORT_PATH = c.BASE_DIR / "reports" / "municipal_metas_comparison.csv"
 SHAP_REPORT_PATH = c.BASE_DIR / "reports" / "municipal_metas_shap_importancia.csv"
+CONFUSION_REPORT_PATH = c.BASE_DIR / "reports" / "municipal_metas_confusion_matrix.csv"
 
 CLASSIFICADORES = {
     "LogisticRegression": lambda: LogisticRegression(max_iter=1000),
@@ -63,8 +64,15 @@ def run() -> pd.DataFrame:
     resultado_df[cols_resumo].to_csv(REPORT_PATH, index=False)
     print(f"\nResumo salvo em {REPORT_PATH}")
 
-    melhor_nome = resultado_df.loc[resultado_df["roc_auc"].idxmax(), "modelo"]
+    melhor_idx = resultado_df["roc_auc"].idxmax()
+    melhor_nome = resultado_df.loc[melhor_idx, "modelo"]
     melhor_model = modelos_ajustados[melhor_nome]
+
+    cm_df = ev.confusion_matrix_df(resultado_df.loc[melhor_idx, "confusion_matrix"], labels=(0, 1))
+    cm_df.to_csv(CONFUSION_REPORT_PATH)
+    print(f"\nMatriz de confusao ({melhor_nome}) -- 0=NAO atingiu meta, 1=atingiu:")
+    print(cm_df.to_string())
+    print(f"Salva em {CONFUSION_REPORT_PATH}")
 
     # As metricas acima (precision/recall/f1) sao pra classe "atingiu meta"
     # (pos_label=1, default do evaluate_model) -- a pergunta de negocio e'

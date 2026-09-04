@@ -43,6 +43,20 @@ def run() -> None:
     fig = ch.bar_perfil_clusters(perfil_clusters, "Perfil médio por cluster municipal (valores normalizados)")
     ch.salvar(fig, IMAGES / "municipal_clusters_perfil.png")
 
+    cm_aluno = pd.read_csv(REPORTS / "baseline_confusion_matrix.csv", index_col=0)
+    fig = ch.matriz_confusao(
+        cm_aluno, "Matriz de confusão -- modelo de aluno (tunado, pesada por VL_PESO_ALUNO_LP)",
+        labels_display=("Não alfabetizado", "Alfabetizado"),
+    )
+    ch.salvar(fig, IMAGES / "matriz_confusao_aluno.png")
+
+    cm_municipal = pd.read_csv(REPORTS / "municipal_metas_confusion_matrix.csv", index_col=0)
+    fig = ch.matriz_confusao(
+        cm_municipal, "Matriz de confusão -- modelo municipal de metas (tunado)",
+        labels_display=("Não atingiu meta", "Atingiu meta"),
+    )
+    ch.salvar(fig, IMAGES / "matriz_confusao_municipal.png")
+
     print(f"Imagens salvas em {IMAGES}")
 
 

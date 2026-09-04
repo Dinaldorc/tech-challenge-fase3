@@ -5,6 +5,7 @@ scripts de `src/modeling`).
 """
 from __future__ import annotations
 from pathlib import Path
+import textwrap
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -63,6 +64,30 @@ def bar_comparacao_modelos(df: pd.DataFrame, titulo: str) -> plt.Figure:
     ax.set_xticklabels(df["cenario"], rotation=20, ha="right")
     ax.set_title(titulo)
     ax.legend()
+    return fig
+
+
+def matriz_confusao(cm_df: pd.DataFrame, titulo: str, labels_display: tuple[str, str] = ("0", "1")) -> plt.Figure:
+    """`cm_df` como salvo por `evaluate.confusion_matrix_df` (index=real_0/
+    real_1, colunas=predito_0/predito_1). Anota cada célula com a contagem
+    (ou soma de peso amostral, se pesado) e o % em relação ao total."""
+    valores = cm_df.to_numpy()
+    total = valores.sum()
+
+    fig, ax = plt.subplots(figsize=(6.5, 5.5))
+    im = ax.imshow(valores, cmap="Blues")
+    ax.set_xticks([0, 1])
+    ax.set_yticks([0, 1])
+    ax.set_xticklabels([f"Previsto:\n{lbl}" for lbl in labels_display])
+    ax.set_yticklabels([f"Real:\n{lbl}" for lbl in labels_display])
+    for i in range(2):
+        for j in range(2):
+            v = valores[i, j]
+            pct = 100 * v / total if total else 0
+            cor_texto = "white" if v > valores.max() / 2 else "black"
+            ax.text(j, i, f"{v:,.0f}\n({pct:.1f}%)", ha="center", va="center", color=cor_texto, fontsize=11)
+    ax.set_title("\n".join(textwrap.wrap(titulo, 40)), fontsize=10)
+    fig.colorbar(im, ax=ax, shrink=0.8)
     return fig
 
 

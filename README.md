@@ -102,8 +102,10 @@ externas por município (ver "Enriquecimento externo por município"
 abaixo): pobreza (CadÚnico, ref. 08/2026), renda per capita (Censo
 Demográfico 2022 do IBGE, tabela divulgada out/2025), nível socioeconômico
 escolar (INSE, ref. 2023) e infraestrutura escolar (Censo Escolar do
-INEP, ref. 2025). Não obtivemos acesso a tempo ao Atlas do Desenvolvimento
-Humano (IDHM) — essas 4 fontes o substituem no projeto.
+INEP, ref. 2025). O Atlas do Desenvolvimento Humano (IDHM) foi avaliado e
+descartado -- não por indisponibilidade, mas porque o indicador não é
+atualizado desde o Censo 2010 (ver "Possíveis evoluções futuras") -- essas
+4 fontes são estritamente mais recentes e o substituem no projeto.
 
 **A etapa de modelagem (treino/teste) usa só o ano de 2025** (2.222.792
 linhas) — ver "Limitações do projeto" para o motivo de restringir a
@@ -347,10 +349,18 @@ nível de município, não de aluno).
   testado (`PC_ESCOLAS_BIBLIOTECA`, `PC_ESCOLAS_LAB_INFORMATICA`,
   `PC_ESCOLAS_INTERNET_ALUNOS`) e o efeito foi nulo/levemente negativo —
   ver "Métricas de avaliação".
-- Obter acesso ao Atlas do Desenvolvimento Humano (IDHM) — não conseguimos
-  a tempo (Atlas Brasil indisponível) e usamos CadÚnico/Censo Demográfico/
-  INSE/Censo Escolar como substituto (ver "Enriquecimento externo por
-  município").
+- [x] ~~Obter acesso ao Atlas do Desenvolvimento Humano (IDHM)~~ -- o Atlas
+  Brasil voltou a ficar acessível e foi checado, mas o IDHM (e seus três
+  componentes -- Renda/Longevidade/Educação) não foi atualizado desde o
+  Censo 2010: não existe versão calculada com o Censo 2022. Ou seja, o
+  motivo de não usar deixou de ser "indisponível" e passou a ser "o dado
+  mais recente já é mais antigo que o que usamos hoje" -- CadÚnico/Censo
+  Demográfico 2022/INSE/Censo Escolar (ver "Enriquecimento externo por
+  município") continuam sendo estritamente melhores como substituto.
+  Mapeamos outras categorias do Atlas potencialmente úteis e mais recentes
+  que o IDHM (IDEB por município, analfabetismo adulto via PNAD/Censo,
+  indicadores de vulnerabilidade infantil) -- não incorporadas nesta
+  versão por restrição de prazo, candidatas a uma evolução futura.
 - Teste de outros algoritmos em árvore (XGBoost, LightGBM) agora que o
   pipeline (`src/modeling/pipeline.py`) já injeta qualquer classificador
   sklearn sem mudança de código -- o tuning do RandomForest já foi feito
@@ -459,9 +469,15 @@ versionados no Git** (ver `.gitignore`) — apenas o código que as gera.
 
 Testamos a hipótese de que municípios mais pobres e com pior infraestrutura
 educacional têm menor taxa de alfabetização (ver `notebooks/01_EDA_Alfabetizacao.ipynb`,
-Seção 8). Não conseguimos acesso ao Atlas do Desenvolvimento Humano (IDHM)
-a tempo (ferramenta do Atlas Brasil indisponível) — as 4 fontes abaixo o
-substituem para este projeto. **Ano/mês de referência de cada uma, verificado
+Seção 8). Avaliamos o Atlas do Desenvolvimento Humano (IDHM) como fonte --
+a ferramenta do Atlas Brasil, indisponível numa primeira tentativa, voltou
+a funcionar, mas o IDHM em si (e os componentes Renda/Longevidade/Educação)
+não tem versão calculada com o Censo 2022, só até o Censo 2010: mais
+desatualizado que as 4 fontes abaixo, que o substituem para este projeto.
+O Atlas também expôs categorias mais recentes e potencialmente úteis (IDEB
+por município, analfabetismo adulto, indicadores de vulnerabilidade
+infantil) não incorporadas por restrição de prazo -- ver "Possíveis
+evoluções futuras". **Ano/mês de referência de cada fonte usada, verificado
 direto no campo interno do arquivo (não só pelo nome da pasta/arquivo)**:
 
 - **Pobreza** — CadÚnico (VIS Data 3). Referência: **agosto/2026**

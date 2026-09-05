@@ -19,6 +19,7 @@ from . import municipal_metas as mm
 
 REPORT_PATH = c.BASE_DIR / "reports" / "municipal_metas_comparison.csv"
 SHAP_REPORT_PATH = c.BASE_DIR / "reports" / "municipal_metas_shap_importancia.csv"
+LIMIAR_REPORT_PATH = c.BASE_DIR / "reports" / "municipal_metas_calibracao_limiar.csv"
 
 CLASSIFICADORES = {
     "LogisticRegression": lambda: LogisticRegression(max_iter=1000),
@@ -74,7 +75,18 @@ def run() -> pd.DataFrame:
     print(f"\nRelatorio por classe ({melhor_nome}) -- a classe 0 (NAO atingiu meta) e' a que importa pra priorizacao:")
     print(classification_report(y_test, pred_melhor, target_names=["NAO_atingiu(0)", "atingiu(1)"]))
 
-    print(f"Melhor cenario: {melhor_nome} -- rodando SHAP...")
+    # Calibracao do limiar de decisao (classe 0 = NAO atingiu meta): o corte
+    # padrao de 0,5 do .predict() nao tem nenhum significado especial pra
+    # essa aplicacao -- comparamos com o limiar que maximiza F1 e com o
+    # limiar mais preciso que ainda garante recall >= 80%, pra dar ao gestor
+    # a opcao de priorizar "nao deixar de fora" um municipio em risco.
+    calibracao_df = ev.calibrar_limiar_decisao(melhor_model, X_test, y_test, classe_alvo=0, recall_minimo=0.80)
+    print(f"\nCalibracao de limiar ({melhor_nome}, classe 0 = NAO atingiu meta):")
+    print(calibracao_df.round(4).to_string(index=False))
+    calibracao_df.to_csv(LIMIAR_REPORT_PATH, index=False)
+    print(f"Salva em {LIMIAR_REPORT_PATH}")
+
+    print(f"\nMelhor cenario: {melhor_nome} -- rodando SHAP...")
 
     shap_values, feature_names, _ = ex.compute_shap_values(
         melhor_model, X_test, mm.NUMERIC_COLS, mm.CATEGORICAL_COLS, sample_size=len(X_test),

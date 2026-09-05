@@ -156,6 +156,41 @@ recorte temporal genuíno, não só na CV. Ainda assim, o tuning trouxe
 ganho real: recall na classe de risco subiu de 51% pra 64% sem perder
 precisão (ver "Estratégia do projeto: perguntas de negócio", pergunta 4).
 
+**XGBoost testado e descartado para o modelo municipal**: repetimos a
+mesma metodologia de busca (`GridSearchCV` + 5-fold CV no treino,
+avaliação no teste real de 2025) trocando o `RandomForestClassifier` por
+`XGBClassifier`. A CV ficou equivalente (0,773 vs. 0,772 do RandomForest),
+mas o teste real caiu pra **0,613** de AUC (vs. 0,663 do RandomForest) --
+um gap CV→teste ainda maior. Com só ~5.400 municípios de treino, o
+boosting sequencial aparentemente se ajusta mais ao ano específico de
+treino do que o bagging do RandomForest generaliza. Mantido o RandomForest.
+
+**Calibração do limiar de decisão** (RandomForest municipal, classe "não
+atingiu meta"): o corte padrão de 0,5 embutido no `.predict()` não tem
+significado especial para esta aplicação. Comparamos, via curva
+precision-recall no teste 2025, o limiar padrão com o limiar que maximiza
+F1 e com o limiar mais preciso que ainda garante recall ≥ 80% -- ver
+`src/evaluation/evaluate.py::calibrar_limiar_decisao` e
+`reports/municipal_metas_calibracao_limiar.csv`:
+
+| Estratégia | Limiar | Precisão | Recall | F1 |
+|---|---|---|---|---|
+| Padrão (0,5) | 0,500 | 0,401 | 0,643 | 0,494 |
+| F1 ótimo | 0,461 | 0,373 | 0,757 | 0,500 |
+| Recall ≥ 80% | 0,441 | 0,360 | 0,801 | 0,497 |
+
+Sem retreinar nada, só ajustando o corte de decisão, o recall sobe de 64%
+para até 80% custando apenas ~4 pontos de precisão -- uma troca barata
+nesta faixa da curva. Qual estratégia usar é uma decisão de política, não
+estatística: o F1 ótimo é neutro quanto ao custo de cada tipo de erro,
+enquanto o limiar de recall ≥ 80% assume que deixar de fora um município
+que realmente vai mal (falso negativo) é mais caro que investigar um
+falso alarme (falso positivo) -- premissa razoável quando o objetivo é
+priorização e não alocação exclusiva de recurso. `run_municipal_risco.py`
+aplica os dois limiares calibrados (`ALERTA_F1_OTIMO`, `ALERTA_RECALL_80`)
+como colunas no ranking de risco, além da probabilidade contínua, para o
+gestor escolher o trade-off.
+
 ## Métricas de avaliação
 
 Split: só ano de 2025 (2.222.792 linhas), 70/30 aleatório estratificado por
@@ -351,11 +386,20 @@ nível de município, não de aluno).
   a tempo (Atlas Brasil indisponível) e usamos CadÚnico/Censo Demográfico/
   INSE/Censo Escolar como substituto (ver "Enriquecimento externo por
   município").
-- Teste de outros algoritmos em árvore (XGBoost, LightGBM) agora que o
-  pipeline (`src/modeling/pipeline.py`) já injeta qualquer classificador
-  sklearn sem mudança de código -- o tuning do RandomForest já foi feito
-  (ver acima), mas outro algoritmo pode se sair melhor ainda com árvores
-  sem limite de profundidade.
+- [x] ~~Testar XGBoost no modelo municipal~~ -- testado e descartado (ver
+  "Escolha do algoritmo"): mesma CV do RandomForest (0,773), mas AUC de
+  teste pior (0,613 vs. 0,663) -- generaliza menos com o volume pequeno de
+  dados (~5.400 municípios de treino). Fica em aberto testar LightGBM ou
+  XGBoost com regularização mais forte (`reg_alpha`/`reg_lambda`,
+  `early_stopping_rounds`) e no modelo de **aluno**, que tem volume de
+  dados bem maior (1,56 milhão de linhas de treino) e pode favorecer mais
+  o boosting do que o municipal.
+- [x] ~~Calibrar o limiar de decisão do modelo municipal~~ -- feito (ver
+  "Escolha do algoritmo"): recall na classe de risco sobe de 64% pra até
+  80% trocando só o corte de decisão, sem retreinar. Falta fazer o mesmo
+  exercício para o modelo de **aluno**, especialmente por UF (limiar
+  específico por estado em vez de um corte único de 0,5, ver bullet acima
+  sobre a degeneração residual).
 
 ## Como rodar
 

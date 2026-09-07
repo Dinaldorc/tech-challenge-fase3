@@ -3,61 +3,115 @@
 ## Contexto do problema
 
 Alfabetizar toda criança até o final do 2º ano do Ensino Fundamental é meta
-do Compromisso Nacional Criança Alfabetizada, mas o resultado varia muito
-pelo território: nos dados usados aqui, a diferença entre a melhor e a pior
-região chega a ~12 pontos percentuais (dado ponderado -- ver "Insights
-encontrados"), e o achado do SHAP (ver "Interpretação
-dos resultados") mostra que essa desigualdade está concentrada em poucos
-estados específicos, não distribuída de forma difusa entre regiões.
+do Compromisso Nacional Criança Alfabetizada, mas o resultado varia
+enormemente pelo território: neste estudo, a diferença entre a melhor e a
+pior região chega a ~12 pontos percentuais (dado ponderado -- ver "Insights
+encontrados"), e o SHAP (ver "Interpretação dos resultados") mostra que essa
+desigualdade não está distribuída de forma difusa entre regiões, mas
+concentrada em poucos estados específicos — um padrão que só se torna
+visível quando a análise é conduzida na granularidade territorial correta.
 
 Hoje o INEP só identifica quem não se alfabetizou **depois** da avaliação
-anual — quando já é tarde para intervir naquele ano letivo. Um modelo que
-aponte, com base em variáveis territoriais e socioeconômicas conhecidas
-*antes* da prova, quais municípios/perfis têm maior risco de baixa
-alfabetização permite que gestores públicos direcionem reforço escolar,
-merenda, transporte ou material didático de forma proativa — não reativa.
+anual — quando já é tarde para intervir naquele ano letivo. Este projeto
+testa uma alternativa: estimar, a partir de indicadores territoriais,
+socioeconômicos e do histórico recente de cada município, o risco de baixa
+alfabetização com antecedência suficiente para viabilizar intervenção —
+reforço escolar, merenda, transporte ou material didático direcionados de
+forma proativa, não reativa. É uma arquitetura pensada para ser genuinamente
+prospectiva e replicável para qualquer unidade federativa do país, à medida
+que fontes administrativas mais tempestivas (CadÚnico, Censo Escolar) forem
+incorporadas com a defasagem correta — ver "Limitações do projeto" para o
+tratamento dado, nesta versão, às fontes cuja referência temporal é
+contemporânea ou posterior ao ano avaliado.
 
 ## Objetivo analítico
-Desenvolver um modelo supervisionado que preveja se um aluno será considerado alfabetizado ou não alfabetizado, com base em variáveis educacionais, territoriais e socioeconômicas.
+
+Desenvolver uma arquitetura analítica supervisionada — replicável para
+qualquer unidade federativa do país — capaz de identificar as variáveis
+mais associadas à alfabetização infantil e de estimar, em diferentes
+granularidades territoriais, o risco de municípios não atingirem suas
+metas educacionais, subsidiando a priorização de políticas públicas de
+reforço à alfabetização.
+
+A investigação partiu de uma hipótese inicial mais ambiciosa — prever a
+alfabetização de cada aluno individualmente — e evoluiu, à luz da evidência
+empírica e das perguntas de negócio propostas pelo desafio (ver "Estratégia
+do projeto" logo abaixo), para um conjunto de modelos na escala municipal:
+a granularidade em que os dados públicos disponíveis efetivamente sustentam
+inferência robusta e aplicação prática.
 
 ## Estratégia do projeto: perguntas de negócio
 
-O Tech Challenge pede que o projeto responda perguntas de negócio, não só
-produza métricas técnicas altas -- o foco é gerar inteligência aplicável
-ao contexto educacional brasileiro. Isso levou a reposicionar o projeto:
-o modelo de **aluno** (`FT_MACHINE_LEARNING`, seções acima) virou um
-resultado secundário documentado -- achado legítimo em si: não há sinal
-individual suficiente pra prever por aluno com os dados públicos
-disponíveis (ver "Limitações do projeto"). O entregável principal passou
-a ser um conjunto de análises a nível de **município**
-(`src/modeling/municipal_metas.py`, `municipal_clustering.py`,
-`run_municipal_*.py`), o grão onde as features realmente variam de
-município pra município e onde a EDA já mostrava sinal real (Seção 8).
+O Tech Challenge pede que o projeto responda perguntas de negócio, não
+apenas produza métricas técnicas altas — o objetivo é gerar inteligência
+aplicável ao contexto educacional brasileiro. Essa exigência acabou
+definindo a arquitetura final do projeto, através de um percurso
+investigativo genuíno, não de uma escolha arbitrária:
 
-**1. Quais fatores mais impactam a alfabetização?** SHAP nos dois modelos
-(aluno e município) aponta o mesmo padrão: `SG_UF` domina, à frente de
-`REGIAO` -- não é uma diferença regional difusa, é específica de estado.
-No modelo municipal (mais interpretável pra essa pergunta), depois do
-estado o que mais pesa é o **desempenho do ano anterior**
-(`DIF_META_ALFABETIZACAO_ANTERIOR`, `PC_ALUNO_ALFABETIZADO_ANTERIOR`) e
-`PC_FAMILIAS_POBREZA` -- ver `reports/municipal_metas_shap_importancia.csv`.
+**Hipótese inicial** — construir um modelo capaz de prever a alfabetização
+de cada aluno individualmente, a partir de variáveis educacionais,
+territoriais e socioeconômicas (`FT_MACHINE_LEARNING`, seções técnicas
+abaixo).
+
+**Investigação** — a análise exploratória e a avaliação de importância de
+features (SHAP) revelaram que as variáveis públicas disponíveis carregam
+forte componente territorial e socioeconômico, mas quase nenhuma variação
+em nível de aluno: 2,2 milhões de alunos colapsam em ~6.500 combinações
+únicas de features, e o modelo, na prática, prevê perfis — não indivíduos
+(ver "Limitações do projeto").
+
+**Redefinição** — confrontado com as cinco perguntas de negócio do desafio,
+ficou claro que quatro delas são intrinsecamente territoriais (risco por
+município, padrões regionais, previsão de metas futuras, variáveis mais
+influentes no modelo municipal). A unidade de análise capaz de responder ao
+que estava sendo pedido não era o aluno — era o **município**.
+
+**Estratégia final** — o modelo de aluno permanece documentado como etapa
+exploratória, com valor científico próprio: evidencia os limites de
+granularidade dos microdados públicos disponíveis. O entregável principal —
+e a base das cinco respostas abaixo — é o conjunto de análises em nível de
+**município** (`src/modeling/municipal_metas.py`, `municipal_clustering.py`,
+`run_municipal_*.py`), a escala em que as features realmente variam de
+município para município e onde a EDA já indicava sinal robusto (Seção 8).
+
+Não se trata de um desvio de rota, e sim do método científico em ação:
+testar uma hipótese, deixar a evidência refutá-la parcialmente e redesenhar
+a abordagem em resposta a essa evidência.
+
+**1. Quais fatores mais impactam a alfabetização?** Interpretamos esta
+pergunta como "quais variáveis mais influenciam as previsões dos modelos":
+o SHAP mede contribuição de cada variável para a previsão, não relação de
+causa e efeito — `SG_UF` e `PC_FAMILIAS_POBREZA` podem estar associados à
+alfabetização por canais que os dados não observam diretamente (qualidade
+de gestão municipal, formação docente, histórico de investimento em
+educação). Feita essa ressalva, o SHAP nos dois modelos (aluno e município)
+aponta o mesmo padrão: `SG_UF` domina, à frente de `REGIAO` -- não é uma
+diferença regional difusa, é específica de estado. No modelo municipal
+(mais interpretável pra essa pergunta), depois do estado o que mais pesa é
+o **desempenho do ano anterior** (`DIF_META_ALFABETIZACAO_ANTERIOR`,
+`PC_ALUNO_ALFABETIZADO_ANTERIOR`) e `PC_FAMILIAS_POBREZA` -- ver
+`reports/municipal_metas_shap_importancia.csv`.
 
 ![SHAP do modelo municipal](images/shap_importancia_municipal.png)
 
-**2. Quais municípios apresentam maior risco educacional?**
-`src/modeling/run_municipal_risco.py` pontua cada um dos 5.500 municípios
-com a probabilidade de não bater a meta de alfabetização no próximo
-ciclo (RandomForest treinado com todo o histórico 2023-2025), usando os
-indicadores mais recentes (2025). Ranking completo em
-`reports/municipal_ranking_risco.csv`. Achado: os municípios de maior
-risco pontuado são majoritariamente do **Rio Grande do Sul** -- não por
-desempenho absoluto ruim (52-73% de alfabetização), mas por ter metas
-muito exigentes em relação à própria trajetória histórica (só 23,7% dos
-anos com meta batida, 2ª pior taxa do país). "Risco de não bater a meta"
-e "baixo desempenho absoluto" são coisas diferentes. A pontuação foi
+**2. Quais municípios apresentam maior risco educacional?** Ressalva
+conceitual antes do resultado: este ranking **não** mede o quão mal
+alfabetizado está um município em termos absolutos — mede a probabilidade
+de o município **não atingir a própria meta** no próximo ciclo, um alvo que
+varia conforme a trajetória histórica de cada um (ver tabela comparativa em
+"O que os modelos entregam — e o que não entregam"). Feita a ressalva,
+`src/modeling/run_municipal_risco.py` pontua os 5.500 municípios do país
+com essa probabilidade (RandomForest treinado com todo o histórico
+2023-2025), usando os indicadores mais recentes (2025). Ranking completo em
+`reports/municipal_ranking_risco.csv`. Achado: os municípios de maior risco
+pontuado são majoritariamente do **Rio Grande do Sul** -- não por
+desempenho absoluto ruim (52-73% de alfabetização), mas por metas
+particularmente exigentes em relação à própria trajetória histórica (só
+23,7% dos anos com meta batida, 2ª pior taxa do país). A pontuação foi
 validada contra o `INDICE_RISCO_ESTRUTURAL` já existente (calculado de
-forma independente, só pela distribuição de níveis de proficiência):
-correlação de 0,314, coerente com duas métricas relacionadas mas distintas.
+forma independente, apenas pela distribuição de níveis de proficiência):
+correlação de 0,314, coerente com duas métricas relacionadas mas
+conceitualmente distintas.
 
 **3. Quais regiões possuem padrões semelhantes?**
 `src/modeling/run_municipal_clustering.py` agrupa os municípios (K-Means,
@@ -86,7 +140,12 @@ Hiperparâmetros otimizados via `GridSearchCV` + 5-fold CV no treino (ver
 Na classe que importa pra política pública (município que **não** vai
 bater a meta, 28,7% da base de teste): precisão 40% (quase o dobro da
 taxa-base de 28,7%) e **recall 64%** (subiu de 51% com o tuning, sem
-perder precisão) -- real e diretamente aplicável a priorização.
+perder precisão) -- real e diretamente aplicável a priorização. Em termos
+de negócio: se um gestor selecionar municípios para intervenção prioritária
+a partir do modelo, aproximadamente 4 em cada 10 selecionados realmente não
+atingirão a meta (quase o dobro do acerto esperado ao selecionar ao acaso),
+e o modelo captura cerca de 64% de todos os municípios que de fato não vão
+bater a meta — deixando de fora pouco mais de 1 em cada 3.
 
 **5. Quais variáveis possuem maior influência nos modelos?** Mesma
 resposta da pergunta 1 -- o SHAP dos dois modelos é a ferramenta usada;
@@ -240,9 +299,13 @@ split 2025, treinado com `sample_weight`:
 - **`SG_UF` domina ainda mais que antes do tuning** (0,088 vs. 0,071) --
   faz sentido: sem limite de profundidade, o modelo tem mais liberdade pra
   explorar as 27 categorias de `SG_UF` a fundo.
-- **Mas `PC_FAMILIAS_POBREZA` agora é a variável *individual* mais
-  importante do modelo inteiro** -- 0,026, à frente até de `SG_UF=CE`
-  isolada (0,014, a UF mais forte). `RENDA_PER_CAPITA_MEDIA` também subiu
+- **Mas, entre as colunas após a expansão categórica (cada UF vira uma
+  dummy própria), `PC_FAMILIAS_POBREZA` supera qualquer UF isolada** --
+  0,026, à frente até de `SG_UF=CE` (0,014, a dummy de UF mais forte). Isso
+  não contradiz `SG_UF` dominar de forma agregada (0,088, soma das 27
+  dummies) -- são duas leituras do mesmo SHAP em granularidades diferentes:
+  por variável original (`SG_UF` agregado) e por categoria expandida
+  (`SG_UF=CE` isolada). `RENDA_PER_CAPITA_MEDIA` também subiu
   bastante (0,009 → 0,017). O modelo tunado está aproveitando o
   enriquecimento socioeconômico de verdade, não só o território --
   reforça ainda mais a decisão de manter essas features apesar da
@@ -283,9 +346,51 @@ split 2025, treinado com `sample_weight`:
 - Amostra da rede privada é pequena demais para generalizar.
 - Reconstrução da camada Gold feita localmente (fora do Databricks/AWS original da Fase 2) — ver seção "Reconstrução da camada Gold" abaixo para detalhes e possíveis pequenas diferenças de metodologia.
 - Renda (Censo 2022) e INSE (SAEB 2023) são fotos únicas, repetidas nos 3 anos do painel (2023-2025) — ver "Enriquecimento externo por município" abaixo.
+- **Defasagem temporal em parte do enriquecimento externo**: o CadÚnico usado reflete a extração mais recente disponível no momento da coleta (agosto/2026) — portanto **posterior** aos anos de avaliação modelados (2023-2025) — e o Censo Escolar usado é de 2025. Isso é adequado para uma leitura **explicativa/diagnóstica** (associação entre contexto socioeconômico e um resultado já observado), mas significa que o modelo, tal como construído nesta versão, não deve ser lido como estritamente prospectivo (ver "Contexto do problema"). Um uso operacional real — aplicado antes de uma avaliação futura — dependeria de alimentar o mesmo pipeline com a extração de CadÚnico/Censo Escolar vigente **naquele momento**, não com dados coletados depois do fato. A arquitetura (features, pipeline, modelo) já suporta essa substituição sem mudança de código; falta apenas a atualização periódica da fonte.
 - **Degeneração de recall por UF (achado central da modelagem, parcialmente resolvida via tuning)**: das 5 correções testadas (split aleatório em vez de temporal, reduzir `max_depth`, infraestrutura escolar, peso amostral, e por fim `RandomizedSearchCV` -- ver "Métricas de avaliação"), as 4 primeiras não resolveram (degeneração oscilando entre 44% e 67% das UFs), mas o tuning sistemático de hiperparâmetros reduziu pra 30% (8 de 27, concentradas nos estados de maior alfabetização real, onde o erro é menos grave). Ainda assim, **dentro de cada combinação de `REGIAO`/`SG_UF`/`TP_DEPENDENCIA`+socioeconômico (~340 alunos em média), o modelo continua prevendo a mesma probabilidade pra todos** — não há como diferenciar alunos individuais dentro do mesmo grupo com as features disponíveis. **Este modelo não deve ser usado para decisões de política pública sobre alunos individuais** (ver "Aplicação prática" e "Evoluções futuras"), mas está bem mais utilizável a nível de grupo/perfil do que a versão anterior sem tuning.
 - **Modelagem restrita ao ano de 2025** (split aleatório 70/30, ver `src/modeling/split.py`): descartamos o split temporal (2023-2024 → 2025) usado numa primeira versão porque a taxa real de alfabetização mudava entre os recortes, misturando "o modelo generaliza mal" com "o mundo mudou entre os anos". O trade-off é não testar a capacidade do modelo de prever um ano futuro nunca visto — só validamos generalização dentro do mesmo ano.
 - **`ID_ESCOLA` não pode ser usado para trazer sinal por escola**: é uma máscara re-sorteada a cada ano pelo INEP (não é o `CO_ENTIDADE` real usado no Censo Escolar, e nem é estável entre 2023-2025) — fecha a porta pra qualquer enriquecimento por escola individual com os dados públicos disponíveis.
+
+## O que os modelos entregam — e o que não entregam
+
+Para uso responsável dos resultados, vale explicitar o escopo de cada
+indicador produzido neste projeto — "risco", "meta" e "alfabetização"
+aparecem em sentidos diferentes ao longo do texto:
+
+| Indicador | O que mede | Onde |
+|---|---|---|
+| `TARGET` / `IN_ALFABETIZADO` | Resultado observado (proficiência ≥ 743 na prova) -- fato passado, não previsão | Modelo de aluno |
+| `INDICE_RISCO_ESTRUTURAL` | Perfil de distribuição dos alunos entre níveis de proficiência, calculado de forma independente (sem modelo preditivo) | `ANALISE_NIVEIS_MUNICIPIO` |
+| `PROBABILIDADE_RISCO_NAO_ATINGIR_META` | Estimativa preditiva (RandomForest) da chance de o município não bater a própria meta no próximo ciclo | `run_municipal_risco.py` |
+| `DISTANCIA_META_2030` | Diferença aritmética entre resultado observado e meta oficial -- sem componente preditivo | `FT_INDICADOR_MUNICIPIO_META_VS_RESULTADO` |
+
+**O que os modelos fazem:**
+- Identificam as variáveis territoriais e socioeconômicas mais associadas
+  às previsões de alfabetização e de atingimento de metas (SHAP).
+- Estimam, por município, o risco relativo de não atingir a meta
+  educacional no próximo ciclo -- instrumento de priorização, não de
+  certeza.
+- Agrupam municípios por similaridade de perfil socioeconômico e
+  educacional, revelando padrões que não coincidem com a divisão regional
+  oficial do IBGE.
+- Apontam, por perfil territorial (UF, faixa de pobreza, INSE), a taxa
+  esperada de alfabetização -- uma estimativa de grupo, não de indivíduo.
+
+**O que os modelos não fazem:**
+- Não preveem o desempenho de uma criança específica, nem substituem
+  avaliação pedagógica individual (ver "Limitações do projeto").
+- Não estabelecem relação causal entre nenhuma variável (pobreza, UF,
+  infraestrutura) e alfabetização -- o SHAP mede contribuição para a
+  previsão de um modelo estatístico, não efeito causal.
+- Não determinam automaticamente alocação de recursos -- subsidiam, não
+  substituem, a decisão do gestor.
+- Não classificam municípios como "bons" ou "ruins" em termos absolutos --
+  o ranking de risco reflete a distância até a meta *daquele* município,
+  não um julgamento de mérito.
+
+Essa distinção é o que separa uma ferramenta de inteligência territorial
+responsável de uma promessa de precisão que os dados públicos disponíveis,
+por ora, não sustentam.
 
 ## Aplicação prática para políticas públicas
 
@@ -499,9 +604,11 @@ já faz essa conversão (`CO_MUNICIPIO // 10`) antes do merge.
 na direção esperada com a taxa de alfabetização
 a nível de **município** (|r| entre 0,18 e 0,29), mas a correlação cai bastante
 a nível de **aluno** — a granularidade real de treino da `FT_MACHINE_LEARNING`
-(|r| entre 0,006 e 0,073, praticamente ruído para renda). Isso é esperado
-(correlação agregada por município é sempre inflada em relação à correlação
-por indivíduo) e não significa que as features sejam inúteis num modelo
+(|r| entre 0,006 e 0,073, praticamente ruído para renda). Isso é esperado -- a agregação por município tende a produzir associações
+mais fortes do que as observadas em nível individual, por efeito de
+composição e redução de ruído idiossincrático (fenômeno próximo à "falácia
+ecológica" na literatura de ciências sociais) -- e não significa que as
+features sejam inúteis num modelo
 multivariado — a decisão de manter ou descartar cada uma fica para a etapa
 de modelagem (importância de feature / SHAP), não para a correlação isolada.
 

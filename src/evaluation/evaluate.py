@@ -9,11 +9,13 @@ do INEP, `VL_PESO_ALUNO_LP` -- ver `features.select_weights`) em todas as
 métricas, pra refletir a representatividade populacional de cada aluno.
 """
 from __future__ import annotations
+import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
     f1_score,
+    precision_recall_curve,
     precision_score,
     recall_score,
     roc_auc_score,
@@ -46,6 +48,57 @@ def evaluate_model(
         "roc_auc": roc_auc_score(y_test, proba, sample_weight=sw),
         "confusion_matrix": confusion_matrix(y_test, pred, sample_weight=sw).tolist(),
     }
+
+
+def calibrar_limiar_decisao(
+    model, X_test: pd.DataFrame, y_test: pd.Series, classe_alvo=0, recall_minimo: float = 0.80,
+) -> pd.DataFrame:
+    """Compara o limiar de decisão padrão (0,5, embutido em `.predict()`)
+    com dois limiares alternativos sobre `predict_proba`, pra classe
+    `classe_alvo` (default 0 -- ex.: "não atingiu meta", a classe que
+    importa pra priorização de política pública, ver README):
+
+    - **F1 ótimo**: o limiar que maximiza a média harmônica entre precisão
+      e recall -- um critério estatístico neutro, sem juízo sobre qual erro
+      (falso positivo ou falso negativo) é mais caro.
+    - **Recall mínimo** (`recall_minimo`, default 0,80): o limiar mais alto
+      (logo, de maior precisão) que ainda garante pelo menos esse recall --
+      uma escolha de política, não estatística, pra quando deixar de fora
+      um caso positivo é considerado mais caro que investigar um falso
+      alarme.
+
+    Retorna um DataFrame com uma linha por estratégia de limiar, pronta pra
+    salvar em CSV e apresentar ao gestor escolher o trade-off."""
+    proba_alvo = model.predict_proba(X_test)[:, classe_alvo]
+    y_bin = (y_test == classe_alvo).astype(int).to_numpy()
+
+    precision, recall, thresholds = precision_recall_curve(y_bin, proba_alvo)
+    f1_scores = np.divide(
+        2 * precision * recall, precision + recall,
+        out=np.zeros_like(precision), where=(precision + recall) != 0,
+    )
+    idx_f1 = int(np.argmax(f1_scores[:-1]))  # ultimo ponto da curva nao tem limiar
+
+    candidatos_recall = np.where(recall[:-1] >= recall_minimo)[0]
+    idx_recall = int(candidatos_recall[np.argmax(precision[candidatos_recall])]) if len(candidatos_recall) else None
+
+    def _linha(nome: str, limiar: float) -> dict:
+        pred = (proba_alvo >= limiar).astype(int)
+        return {
+            "estrategia": nome,
+            "limiar": limiar,
+            "precision": precision_score(y_bin, pred, zero_division=0),
+            "recall": recall_score(y_bin, pred, zero_division=0),
+            "f1": f1_score(y_bin, pred, zero_division=0),
+        }
+
+    linhas = [
+        _linha("padrao_0.5", 0.5),
+        _linha("f1_otimo", float(thresholds[idx_f1])),
+    ]
+    if idx_recall is not None:
+        linhas.append(_linha(f"recall_minimo_{recall_minimo:.0%}", float(thresholds[idx_recall])))
+    return pd.DataFrame(linhas)
 
 
 def evaluate_by_group(

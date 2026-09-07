@@ -20,6 +20,16 @@ from . import municipal_metas as mm
 
 RANKING_PATH = c.BASE_DIR / "reports" / "municipal_ranking_risco.csv"
 
+# Limiares calibrados em run_municipal_metas.py (curva precision-recall no
+# teste 2025, nunca visto no treino) -- ver "Calibracao de limiar" no README
+# e reports/municipal_metas_calibracao_limiar.csv. Aplicados aqui ao modelo
+# de producao (treinado com todo o historico, nao so o split de validacao),
+# que reusa o mesmo pipeline/hiperparametros -- por isso os limiares
+# calibrados no split sao um proxy razoavel, ainda que nao recalibrados
+# neste modelo especifico.
+LIMIAR_F1_OTIMO = 0.4612
+LIMIAR_RECALL_80 = 0.4412
+
 
 def run() -> pd.DataFrame:
     df = mm.build_dataset()
@@ -66,7 +76,17 @@ def run() -> pd.DataFrame:
     ]].rename(columns={"PC_ALUNO_ALFABETIZADO_ANTERIOR": "PC_ALUNO_ALFABETIZADO_2025"})
     ranking = ranking.sort_values("PROBABILIDADE_RISCO_NAO_ATINGIR_META", ascending=False).reset_index(drop=True)
 
+    # Duas colunas de alerta, alem do limiar padrao de 0,5 implicito no
+    # ranking continuo -- deixam o gestor escolher o trade-off entre
+    # precisao e recall (ver "Calibracao de limiar" no README) sem precisar
+    # decidir um corte arbitrario na probabilidade bruta.
+    proba = ranking["PROBABILIDADE_RISCO_NAO_ATINGIR_META"]
+    ranking["ALERTA_F1_OTIMO"] = proba >= LIMIAR_F1_OTIMO
+    ranking["ALERTA_RECALL_80"] = proba >= LIMIAR_RECALL_80
+
     print(f"Municipios pontuados: {len(ranking):,}")
+    print(f"Sinalizados no limiar F1 otimo (>={LIMIAR_F1_OTIMO}): {ranking['ALERTA_F1_OTIMO'].sum():,}")
+    print(f"Sinalizados no limiar de recall>=80% (>={LIMIAR_RECALL_80}): {ranking['ALERTA_RECALL_80'].sum():,}")
     print("\nTop 15 municipios de MAIOR risco (projecao pro proximo ciclo):")
     print(ranking.head(15).to_string(index=False))
 

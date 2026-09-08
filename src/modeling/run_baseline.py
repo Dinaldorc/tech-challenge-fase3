@@ -23,6 +23,7 @@ REPORT_PATH = c.BASE_DIR / "reports" / "baseline_comparison.csv"
 REGIAO_REPORT_PATH = c.BASE_DIR / "reports" / "baseline_metricas_por_regiao.csv"
 UF_REPORT_PATH = c.BASE_DIR / "reports" / "baseline_metricas_por_uf.csv"
 UF_INFRA_REPORT_PATH = c.BASE_DIR / "reports" / "baseline_metricas_por_uf_com_infraestrutura.csv"
+CONFUSION_REPORT_PATH = c.BASE_DIR / "reports" / "baseline_confusion_matrix.csv"
 
 CLASSIFICADORES = {
     "LogisticRegression": lambda: LogisticRegression(max_iter=1000),
@@ -75,9 +76,16 @@ def run() -> pd.DataFrame:
     # Melhor cenario (maior ROC-AUC) -- quebra por regiao E por UF pra
     # checar se o modelo reproduz/agrava a disparidade achada na EDA
     # (Secao 5, revisada: ~13pp por regiao, mas 47pp por UF -- CE x RN).
-    melhor_chave = resultado_df.loc[resultado_df["roc_auc"].idxmax(), ["modelo", "enriquecimento_socioeconomico"]]
+    melhor_idx = resultado_df["roc_auc"].idxmax()
+    melhor_chave = resultado_df.loc[melhor_idx, ["modelo", "enriquecimento_socioeconomico"]]
     melhor = (melhor_chave["modelo"], bool(melhor_chave["enriquecimento_socioeconomico"]))
     model, X_test, y_test = modelos_ajustados[melhor]
+
+    cm_df = ev.confusion_matrix_df(resultado_df.loc[melhor_idx, "confusion_matrix"])
+    cm_df.to_csv(CONFUSION_REPORT_PATH)
+    print(f"\nMatriz de confusao ({melhor[0]}, socioeconomico={melhor[1]}) -- pesada por VL_PESO_ALUNO_LP:")
+    print(cm_df.to_string())
+    print(f"Salva em {CONFUSION_REPORT_PATH}")
 
     print(f"\nMelhor cenario ({melhor[0]}, socioeconomico={melhor[1]}) -- metricas por regiao:")
     regiao_df = ev.evaluate_by_group(model, X_test, y_test, "REGIAO", sample_weight=w_test)

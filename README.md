@@ -678,3 +678,14 @@ valor se repete pra um dado município em todos os anos/transições onde é
 usado (os 3 anos do painel de aluno, 2023-2025; e as 2 transições do modelo
 municipal, 2023→2024 e 2024→2025), diferente do CadÚnico que já reflete a
 referência mais recente (08/2026) disponível no momento da coleta.
+
+## Autor(es)
+
+- Afonso Augusto Santana Sales Rios (RM 373057)
+- Bruno Macedo da Silva (RM 374187)
+- Dinaldo Ribeiro de Carvalho (RM 370350)
+- Luís Gustavo Juliano de França (RM 371599)
+
+**Grupo:** 28
+**Data:** 07/2026
+**Atualizado em:** 08/09/2026

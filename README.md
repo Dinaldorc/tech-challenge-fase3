@@ -31,27 +31,40 @@ contemporânea ou posterior ao ano avaliado.
 
 ## Objetivo analítico
 
-Desenvolver uma arquitetura analítica supervisionada — replicável para
-qualquer unidade federativa do país — capaz de identificar as variáveis
-mais associadas à alfabetização infantil e de estimar, em diferentes
-granularidades territoriais, o risco de municípios não atingirem suas
-metas educacionais, subsidiando a priorização de políticas públicas de
-reforço à alfabetização.
+Desenvolver um modelo supervisionado capaz de prever se um aluno será
+considerado alfabetizado ou não alfabetizado, com base em variáveis
+educacionais, territoriais e socioeconômicas da camada Gold construída na
+Fase 2 (`FT_MACHINE_LEARNING`) — este é o objetivo técnico central do
+desafio, e o modelo de aluno documentado neste README o cumpre
+integralmente: pipeline de pré-processamento integrado ao modelo,
+tratamento explícito de data leakage, otimização de hiperparâmetros via
+validação cruzada e interpretabilidade via SHAP (ver "Etapas de
+modelagem", "Escolha do algoritmo" e "Interpretação dos resultados").
 
-A investigação partiu de uma hipótese inicial mais ambiciosa — prever a
-alfabetização de cada aluno individualmente — e evoluiu, à luz da evidência
-empírica e das perguntas de negócio propostas pelo desafio (ver "Estratégia
-do projeto" logo abaixo), para um conjunto de modelos na escala municipal:
-a granularidade em que os dados públicos disponíveis efetivamente sustentam
-inferência robusta e aplicação prática.
+A própria interpretabilidade do modelo produziu um achado analítico
+relevante: as variáveis territoriais e socioeconômicas públicas disponíveis
+explicam melhor o **contexto** em que cada aluno está inserido do que o
+aluno individualmente — 2,2 milhões de registros colapsam em ~6.500
+combinações únicas de features, um limite estrutural da granularidade dos
+microdados públicos (ver "Limitações do projeto"), não uma limitação do
+modelo em si. Esse achado motivou a extensão descrita em "Estratégia do
+projeto" logo abaixo: um segundo conjunto de modelos supervisionados em
+nível de **município**, construído para responder diretamente às perguntas
+de negócio da seção "Aplicação Estratégica" do desafio -- exigência
+explicitamente adicional à modelagem técnica central, não substituta dela.
+A arquitetura resultante é replicável para qualquer unidade federativa do
+país, subsidiando a priorização de políticas públicas de reforço à
+alfabetização em ambas as granularidades.
 
 ## Estratégia do projeto: perguntas de negócio
 
-O Tech Challenge pede que o projeto responda perguntas de negócio, não
-apenas produza métricas técnicas altas — o objetivo é gerar inteligência
-aplicável ao contexto educacional brasileiro. Essa exigência acabou
-definindo a arquitetura final do projeto, através de um percurso
-investigativo genuíno, não de uma escolha arbitrária:
+O desafio pede, além da modelagem técnica em si (objetivo central,
+cumprido pelo modelo de aluno -- ver "Objetivo analítico"), que o projeto
+responda perguntas de negócio: o foco ali não é apenas gerar métricas
+técnicas altas, mas produzir inteligência aplicável ao contexto
+educacional brasileiro. Essa exigência levou a um segundo modelo,
+construído através de um percurso investigativo genuíno, não de uma
+escolha arbitrária:
 
 **Hipótese inicial** — construir um modelo capaz de prever a alfabetização
 de cada aluno individualmente, a partir de variáveis educacionais,
@@ -65,23 +78,30 @@ em nível de aluno: 2,2 milhões de alunos colapsam em ~6.500 combinações
 únicas de features, e o modelo, na prática, prevê perfis — não indivíduos
 (ver "Limitações do projeto").
 
-**Redefinição** — confrontado com as cinco perguntas de negócio do desafio,
-ficou claro que quatro delas são intrinsecamente territoriais (risco por
+**Ampliação de escopo** — confrontadas com as cinco perguntas de negócio do
+desafio, quatro delas se mostraram intrinsecamente territoriais (risco por
 município, padrões regionais, previsão de metas futuras, variáveis mais
-influentes no modelo municipal). A unidade de análise capaz de responder ao
-que estava sendo pedido não era o aluno — era o **município**.
+influentes no modelo municipal). Respondê-las com rigor exigia um segundo
+modelo, na granularidade em que essas perguntas fazem sentido: o
+**município**.
 
-**Estratégia final** — o modelo de aluno permanece documentado como etapa
-exploratória, com valor científico próprio: evidencia os limites de
-granularidade dos microdados públicos disponíveis. O entregável principal —
-e a base das cinco respostas abaixo — é o conjunto de análises em nível de
-**município** (`src/modeling/municipal_metas.py`, `municipal_clustering.py`,
-`run_municipal_*.py`), a escala em que as features realmente variam de
-município para município e onde a EDA já indicava sinal robusto (Seção 8).
+**Arquitetura final, com dois modelos complementares** — o modelo de
+**aluno** (`FT_MACHINE_LEARNING`, objetivo técnico central do desafio, ver
+"Objetivo analítico") é o entregável que responde "um aluno será
+alfabetizado?" e evidencia, com rigor analítico, os limites reais de
+granularidade dos microdados públicos disponíveis -- achado relevante em
+si, não uma limitação escondida. O modelo **municipal**
+(`src/modeling/municipal_metas.py`, `municipal_clustering.py`,
+`run_municipal_*.py`) é a resposta direta à seção "Aplicação Estratégica"
+do desafio, na escala em que as features realmente variam de município
+para município e onde a EDA já indicava sinal robusto (Seção 8).
 
-Não se trata de um desvio de rota, e sim do método científico em ação:
-testar uma hipótese, deixar a evidência refutá-la parcialmente e redesenhar
-a abordagem em resposta a essa evidência.
+Não se trata de abandonar o objetivo original, e sim do método científico
+em ação: testar uma hipótese, deixar a evidência delimitar com precisão o
+que ela pode e não pode responder, e complementar a arquitetura em resposta
+a essa evidência -- exatamente como o desafio convida a equipe a fazer ao
+encerrar com "não deixem de explorar hipóteses, testar abordagens
+diferentes e discutir suas ideias com os professores".
 
 **1. Quais fatores mais impactam a alfabetização?** Interpretamos esta
 pergunta como "quais variáveis mais influenciam as previsões dos modelos":

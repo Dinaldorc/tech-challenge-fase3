@@ -147,6 +147,14 @@ atingirão a meta (quase o dobro do acerto esperado ao selecionar ao acaso),
 e o modelo captura cerca de 64% de todos os municípios que de fato não vão
 bater a meta — deixando de fora pouco mais de 1 em cada 3.
 
+![Matriz de confusão -- modelo municipal de metas](images/matriz_confusao_municipal.png)
+
+Matriz de confusão (`reports/municipal_metas_confusion_matrix.csv`): dos
+1.557 municípios de teste que realmente não bateram a meta, o modelo
+identifica 1.001 (64%, os 556 restantes são falsos negativos) -- é esse
+grupo de 1.001 acertos que sustenta a priorização de política pública
+proposta acima.
+
 **5. Quais variáveis possuem maior influência nos modelos?** Mesma
 resposta da pergunta 1 -- o SHAP dos dois modelos é a ferramenta usada;
 ver `reports/shap_importancia.csv` (aluno) e
@@ -313,6 +321,15 @@ e `PC_ESCOLAS_INTERNET_ALUNOS`: acurácia 0,6288, F1 0,7213, AUC 0,6587
 já resolvido em boa parte pelo tuning, a infraestrutura escolar (mesmo nível
 municipal das outras 3 features) não acrescenta muito mais. Ver
 `reports/baseline_metricas_por_uf_com_infraestrutura.csv`.
+
+**Matriz de confusão** (mesmo cenário -- RandomForest tunado + enriquecimento
+-- pesada por `VL_PESO_ALUNO_LP`, `reports/baseline_confusion_matrix.csv`):
+dos alunos ponderados realmente não alfabetizados, 195.665 (26,3% do total
+do teste) foram previstos como alfabetizados -- é o principal erro do
+modelo (falsos positivos), o que explica a precisão moderada (0,6461) na
+classe "alfabetizado" mesmo com recall alto (0,8162) nessa mesma classe.
+
+![Matriz de confusão -- modelo de aluno](images/matriz_confusao_aluno.png)
 
 ## Interpretação dos resultados
 

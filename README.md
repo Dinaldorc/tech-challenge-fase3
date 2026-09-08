@@ -1,5 +1,10 @@
 # Tech Challenge – Fase 3: Predição e Inteligência Analítica para Alfabetização no Brasil
 
+> Este README cobre contexto de negócio, metodologia e resultados. Para
+> arquitetura técnica, schema de dados, mapa de módulos, espaços de busca
+> de hiperparâmetros e grafo de dependência entre scripts, ver
+> [`docs/documentacao_tecnica.md`](docs/documentacao_tecnica.md).
+
 ## Contexto do problema
 
 Alfabetizar toda criança até o final do 2º ano do Ensino Fundamental é meta

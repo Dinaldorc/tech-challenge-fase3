@@ -15,6 +15,16 @@ data/processed/*
 !data/gold/.gitkeep
 !data/processed/.gitkeep
 
+# Fontes externas de enriquecimento (ver README, "Enriquecimento externo
+# por município"). Precisa reabrir a pasta inteira primeiro (uma vez
+# ignorada, um diretório não deixa reincluir arquivos individuais dentro
+# dele) e depois re-ignorar explicitamente as 2 fontes que NÃO devem ser
+# versionadas (renda, INSE -- baixadas manualmente) -- só CadÚnico e Censo
+# Escolar ficam versionados, por já virem pequenos/processados o bastante.
+!data/raw/fontes_externas/
+data/raw/fontes_externas/censo2022_renda_per_capita_municipio.csv
+data/raw/fontes_externas/INSE_2023_escolas.xlsx
+
 # Microdados brutos do Censo Escolar (INEP) - muito grandes para versionar
 *.pkl
 *.joblib

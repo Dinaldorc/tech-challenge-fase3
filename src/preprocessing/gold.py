@@ -33,22 +33,26 @@ def _build_dim_municipio_socioeconomico() -> pd.DataFrame:
     como candidatas a feature, não como certeza; a decisão de
     manter/descartar cabe à etapa de modelagem (SHAP).
 
-    Fontes esperadas em disco (não versionadas no Git, ver README):
-    data/raw/censo_renda/censo2022_renda_per_capita_municipio.csv,
-    data/raw/INSE/INSE_2023_escolas.xlsx,
-    data/gold_sample/cadastro_unico_pobreza/CADUNICO_FAMILIAS_POBREZA_MUNICIPIO.csv,
-    data/microdados_censo_escolar_2025/dados/_escola_2025_full.parquet
+    Fontes esperadas em disco, todas em `data/raw/fontes_externas/` (ver
+    README, "Enriquecimento externo por município"). Renda e INSE não são
+    versionadas no Git (baixadas manualmente); CadÚnico e Censo Escolar são
+    versionados mesmo dentro de `data/raw/` (exceção pontual no
+    `.gitignore`) por já virem pequenos/processados o bastante:
+    data/raw/fontes_externas/censo2022_renda_per_capita_municipio.csv,
+    data/raw/fontes_externas/INSE_2023_escolas.xlsx,
+    data/raw/fontes_externas/CADUNICO_FAMILIAS_POBREZA_MUNICIPIO.csv,
+    data/raw/fontes_externas/_escola_2025_full.parquet
     """
-    renda = pd.read_csv(c.RAW_PATH / "censo_renda" / "censo2022_renda_per_capita_municipio.csv")
+    FONTES_EXTERNAS_PATH = c.RAW_PATH / "fontes_externas"
+
+    renda = pd.read_csv(FONTES_EXTERNAS_PATH / "censo2022_renda_per_capita_municipio.csv")
     dim = renda[["CO_MUNICIPIO", "RENDA_PER_CAPITA_MEDIA"]].copy()
 
-    inse = pd.read_excel(c.RAW_PATH / "INSE" / "INSE_2023_escolas.xlsx")
+    inse = pd.read_excel(FONTES_EXTERNAS_PATH / "INSE_2023_escolas.xlsx")
     inse_municipio = inse.groupby("CO_MUNICIPIO", as_index=False)["MEDIA_INSE"].mean()
     dim = dim.merge(inse_municipio, on="CO_MUNICIPIO", how="left")
 
-    cadunico = pd.read_csv(
-        c.BASE_DIR / "data" / "gold_sample" / "cadastro_unico_pobreza" / "CADUNICO_FAMILIAS_POBREZA_MUNICIPIO.csv"
-    )
+    cadunico = pd.read_csv(FONTES_EXTERNAS_PATH / "CADUNICO_FAMILIAS_POBREZA_MUNICIPIO.csv")
     cadunico["PC_FAMILIAS_POBREZA"] = (
         cadunico["QT_FAMILIAS_POBREZA_FAIXA_PBF"]
         / (cadunico["QT_FAMILIAS_POBREZA_FAIXA_PBF"]
@@ -73,7 +77,7 @@ def _build_dim_municipio_socioeconomico() -> pd.DataFrame:
     # 2023-2025 -- ver notebook de EDA), entao so da' pra agregar por
     # municipio, nao por escola individual.
     escola = pd.read_parquet(
-        c.BASE_DIR / "data" / "microdados_censo_escolar_2025" / "dados" / "_escola_2025_full.parquet",
+        FONTES_EXTERNAS_PATH / "_escola_2025_full.parquet",
         columns=["CO_MUNICIPIO", "TP_SITUACAO_FUNCIONAMENTO", "IN_BIBLIOTECA",
                  "IN_LABORATORIO_INFORMATICA", "IN_INTERNET_ALUNOS"],
     )

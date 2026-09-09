@@ -669,29 +669,36 @@ infantil) não incorporadas por restrição de prazo -- ver "Possíveis
 evoluções futuras". **Ano/mês de referência de cada fonte usada, verificado
 direto no campo interno do arquivo (não só pelo nome da pasta/arquivo)**:
 
+Todas as 4 fontes ficam em **`data/raw/fontes_externas/`** (pasta
+dedicada, ver `src/preprocessing/gold.py::_build_dim_municipio_socioeconomico`).
+Duas já vêm incluídas no repositório (exceção pontual no `.gitignore` --
+pequenas/processadas o bastante pra versionar); as outras duas precisam
+ser baixadas manualmente:
+
 - **Pobreza** — CadÚnico (VIS Data 3). Referência: **agosto/2026**
   (campo `MES_REFERENCIA`) — não é "ano base 2025, divulgado depois", o
   próprio dado já é a extração mais recente disponível na ferramenta VIS
   Data 3 no momento em que baixamos. % de famílias na faixa de pobreza do
   PBF por município:
-  `data/gold_sample/cadastro_unico_pobreza/CADUNICO_FAMILIAS_POBREZA_MUNICIPIO.csv`
+  `data/raw/fontes_externas/CADUNICO_FAMILIAS_POBREZA_MUNICIPIO.csv`
   (já incluído no repositório).
 - **Renda** — **Censo Demográfico 2022** do IBGE (SIDRA, tabela 10295) --
   *diferente do Censo Escolar abaixo, cuidado pra não confundir os dois*.
   Referência: ano base **2022**, tabela divulgada em out/2025. Renda per
   capita média por município. Baixe e salve em
-  `data/raw/censo_renda/censo2022_renda_per_capita_municipio.csv`.
+  `data/raw/fontes_externas/censo2022_renda_per_capita_municipio.csv`
+  (não incluído no repositório).
 - **Nível socioeconômico escolar (INSE)** — INEP/SAEB. Referência:
   **2023** (campo `NU_ANO_SAEB`), por escola. Baixe e salve em
-  `data/raw/INSE/INSE_2023_escolas.xlsx`.
+  `data/raw/fontes_externas/INSE_2023_escolas.xlsx`
+  (não incluído no repositório).
 - **Infraestrutura escolar** (`PC_ESCOLAS_BIBLIOTECA`, `PC_ESCOLAS_LAB_INFORMATICA`,
   `PC_ESCOLAS_INTERNET_ALUNOS`) — **Censo Escolar do INEP**, tabela Escola
   (*diferente do Censo Demográfico do IBGE acima*). Referência: **2025**
   (campo `NU_ANO_CENSO`, sem defasagem entre coleta e ano base). Baixe e
-  salve em `data/microdados_censo_escolar_2025/dados/_escola_2025_full.parquet`
-  (ver "Estrutura Mínima do Repositório"; adicionado depois do
-  enriquecimento original, ver "Métricas de avaliação" pro teste com essas
-  3 variáveis).
+  salve em `data/raw/fontes_externas/_escola_2025_full.parquet`
+  (já incluído no repositório; adicionado depois do enriquecimento
+  original, ver "Métricas de avaliação" pro teste com essas 3 variáveis).
 
 **Atenção ao join:** o CadÚnico usa o código IBGE **sem dígito verificador**
 (6 dígitos, ex.: `120001` para Acrelândia), enquanto `CO_MUNICIPIO` no

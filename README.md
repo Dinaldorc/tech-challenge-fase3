@@ -11,23 +11,28 @@ Alfabetizar toda criança até o final do 2º ano do Ensino Fundamental é meta
 do Compromisso Nacional Criança Alfabetizada, mas o resultado varia
 enormemente pelo território: neste estudo, a diferença entre a melhor e a
 pior região chega a ~12 pontos percentuais (dado ponderado -- ver "Insights
-encontrados"), e o SHAP (ver "Interpretação dos resultados") mostra que essa
-desigualdade não está distribuída de forma difusa entre regiões, mas
-concentrada em poucos estados específicos — um padrão que só se torna
-visível quando a análise é conduzida na granularidade territorial correta.
+encontrados"), e a análise de SHAP (ver "Interpretação dos resultados")
+indica que a UF concentra a maior contribuição para as previsões dos
+modelos, reforçando um padrão já observado na EDA: a desigualdade não está
+distribuída de forma difusa entre regiões, mas concentrada em poucos
+estados específicos -- um padrão que só se torna visível quando a análise
+é conduzida na granularidade territorial correta.
 
 Hoje o INEP só identifica quem não se alfabetizou **depois** da avaliação
 anual — quando já é tarde para intervir naquele ano letivo. Este projeto
-testa uma alternativa: estimar, a partir de indicadores territoriais,
-socioeconômicos e do histórico recente de cada município, o risco de baixa
-alfabetização com antecedência suficiente para viabilizar intervenção —
-reforço escolar, merenda, transporte ou material didático direcionados de
-forma proativa, não reativa. É uma arquitetura pensada para ser genuinamente
-prospectiva e replicável para qualquer unidade federativa do país, à medida
-que fontes administrativas mais tempestivas (CadÚnico, Censo Escolar) forem
-incorporadas com a defasagem correta — ver "Limitações do projeto" para o
-tratamento dado, nesta versão, às fontes cuja referência temporal é
-contemporânea ou posterior ao ano avaliado.
+propõe uma arquitetura com potencial prospectivo: estimar, a partir de
+indicadores territoriais, socioeconômicos e do histórico recente de cada
+município, o risco de **não atingir a meta de alfabetização** no próximo
+ciclo com antecedência suficiente para viabilizar intervenção — reforço
+escolar, merenda, transporte ou material didático direcionados de forma
+proativa, não reativa. Nesta versão, entretanto, a avaliação é
+predominantemente **explicativa/diagnóstica**: parte das variáveis de
+enriquecimento disponíveis (CadÚnico, Censo Escolar) tem referência
+temporal contemporânea ou posterior aos anos modelados -- ver "Limitações
+do projeto" para o detalhamento e a justificativa metodológica dessa
+escolha. A arquitetura é replicável para qualquer unidade federativa do
+país e passa a ser genuinamente prospectiva assim que alimentada com
+extrações vigentes no momento da previsão, sem qualquer mudança de código.
 
 ## Objetivo analítico
 
@@ -47,10 +52,10 @@ explicam melhor o **contexto** em que cada aluno está inserido do que o
 aluno individualmente, pois 2,2 milhões de registros colapsam em torno de 6.500
 combinações únicas de features, um limite estrutural da granularidade dos
 microdados públicos (ver "Limitações do projeto"), não uma limitação do
-modelo em si. Esse achado motivou a extensão descrita em "Estratégia do
-projeto" num segundo conjunto de modelos supervisionados em nível de 
-**município**, construído para responder diretamente às perguntas
-de negócio da seção "Aplicação Estratégica" do desafio, exigência
+modelo em si. Esse achado motivou a extensão descrita em "Estratégia do projeto" logo
+abaixo: um segundo conjunto de modelos supervisionados em nível de
+**município**, construído para responder diretamente às perguntas de
+negócio da seção "Aplicação Estratégica" do desafio, exigência
 explicitamente adicional à modelagem técnica central, não substituta dela.
 A arquitetura resultante é replicável para qualquer unidade federativa do
 país, subsidiando a priorização de políticas públicas de reforço à
@@ -86,10 +91,13 @@ modelo, na granularidade em que essas perguntas fazem sentido: o
 **município**.
 
 **Arquitetura final, com dois modelos complementares** — o modelo de
-**aluno** (`FT_MACHINE_LEARNING`, objetivo técnico central do desafio")
-é o entregável que responde "um aluno será alfabetizado?" e evidencia,
-com rigor analítico, os limites reais de granularidade dos microdados 
-públicos disponíveis, achado relevante em si, não uma limitação escondida. 
+**aluno** (`FT_MACHINE_LEARNING`, objetivo técnico central do desafio)
+atende tecnicamente ao objetivo de classificação -- pipeline integrado,
+tratamento de leakage, tuning e SHAP -- e evidencia, com rigor analítico,
+os limites reais de granularidade dos microdados públicos disponíveis:
+achado relevante em si, não uma limitação escondida (ver "Limitações do
+projeto" sobre por que essa previsão não deve ser lida como estimativa
+individual do aluno).
 O modelo **municipal** (`src/modeling/municipal_metas.py`, `municipal_clustering.py`,
 `run_municipal_*.py`) é a resposta direta à seção "Aplicação Estratégica"
 do desafio, na escala em que as features realmente variam de município
@@ -108,12 +116,14 @@ o SHAP mede contribuição de cada variável para a previsão, não relação de
 causa e efeito — `SG_UF` e `PC_FAMILIAS_POBREZA` podem estar associados à
 alfabetização por canais que os dados não observam diretamente (qualidade
 de gestão municipal, formação docente, histórico de investimento em
-educação). Feita essa ressalva, o SHAP nos dois modelos (aluno e município)
-aponta o mesmo padrão: `SG_UF` domina, à frente de `REGIAO. Não é uma
-diferença regional difusa, é específica de estado. No modelo municipal
-(mais interpretável pra essa pergunta), depois do estado o que mais pesa é
-o **desempenho do ano anterior** (`DIF_META_ALFABETIZACAO_ANTERIOR`,
-`PC_ALUNO_ALFABETIZADO_ANTERIOR`) e `PC_FAMILIAS_POBREZA` (ver
+educação). Feita essa ressalva, a análise de SHAP nos dois modelos (aluno
+e município) aponta o mesmo padrão: `SG_UF` concentra a maior contribuição
+para as previsões, à frente de `REGIAO`. Não é uma diferença regional
+difusa, é específica de estado. O modelo municipal é mais adequado a essa
+pergunta, por operar na granularidade onde as features realmente variam.
+Nele, depois do estado, o que mais contribui é o **desempenho do ano
+anterior** (`DIF_META_ALFABETIZACAO_ANTERIOR`, `PC_ALUNO_ALFABETIZADO_ANTERIOR`).
+Em seguida vem `PC_FAMILIAS_POBREZA` (ver
 `reports/municipal_metas_shap_importancia.csv`).
 
 ![SHAP do modelo municipal](images/shap_importancia_municipal.png)
@@ -156,9 +166,9 @@ Ver `reports/municipal_clusters_perfil.csv` e
 **4. Como prever municípios que podem não atingir metas futuras?**
 `src/modeling/municipal_metas.py` + `run_municipal_metas.py`:
 RandomForest treinado em 2024 (usando indicadores de 2023), testado em
-2025 (usando indicadores de 2024) - split temporal genuíno, válido
+2025 (usando indicadores de 2024) -- split temporal genuíno, válido
 porque `CO_MUNICIPIO` é o código IBGE oficial (estável entre anos, ao
-contrário de `ID_ALUNO`/`ID_ESCOLA` - "Limitações do projeto").
+contrário de `ID_ALUNO`/`ID_ESCOLA` -- "Limitações do projeto").
 Hiperparâmetros otimizados via `GridSearchCV` + 5-fold CV no treino (ver
 `run_municipal_metas_tuning.py` e "Escolha do algoritmo"): AUC = 0,663.
 Na classe que importa pra política pública (município que **não** vai
@@ -180,7 +190,7 @@ grupo de 1.001 acertos que sustenta a priorização de política pública
 proposta acima.
 
 **5. Quais variáveis possuem maior influência nos modelos?** Mesma
-resposta da pergunta 1 - o SHAP dos dois modelos é a ferramenta usada;
+resposta da pergunta 1 -- o SHAP dos dois modelos é a ferramenta usada;
 ver `reports/shap_importancia.csv` (aluno) e
 `reports/municipal_metas_shap_importancia.csv` (município).
 
@@ -222,14 +232,16 @@ enriquecimento** venceu em todas as métricas, conforme tabela abaixo, e foi o
 majoritária" no teste. Escolhido por ser o melhor resultado e por permitir
 a interpretação via SHAP (Seção "Interpretação dos resultados").
 
-**Hiperparâmetros otimizados via `RandomizedSearchCV`** - 10 combinações x
-3-fold CV, numa amostra estratificada de 300 mil linhas do treino - o
-treino completo tem 1,56 milhão, caro demais para busca exaustiva; ver
-`src/modeling/run_baseline_tuning.py`): `n_estimators=148`,
+**Hiperparâmetros otimizados via `RandomizedSearchCV`** -- 10 combinações x
+3-fold CV, numa amostra estratificada de 300 mil linhas do treino -- o
+treino completo tem 1,56 milhão, computacionalmente custoso demais para
+busca exaustiva; ver `src/modeling/run_baseline_tuning.py`): `n_estimators=148`,
 `max_depth=None` (sem limite) e `min_samples_leaf=98`. **Isso corrigiu boa
-parte da degeneração de recall por UF que persistia em todas as tentativas
+parte da degeneração de recall por UF** -- situação em que o modelo passa
+a prever praticamente uma única classe dentro de determinada UF, tratando
+todo o estado como homogêneo -- **que persistia em todas as tentativas
 anteriores** (split, `max_depth` testado manualmente até 10, infraestrutura
-escolar, peso amostral - ver "Evoluções futuras"): a combinação de
+escolar, peso amostral -- ver "Evoluções futuras"): a combinação de
 profundidade *sem limite* com `min_samples_leaf` bem mais alto que o valor
 testado manualmente antes (98 vs. 50) nunca tinha sido coberta pelos testes
 manuais, que sempre limitavam a profundidade. Ver "Métricas de avaliação".
@@ -262,7 +274,7 @@ treino do que o bagging do RandomForest generaliza. Mantido o RandomForest.
 atingiu meta"): o corte padrão de 0,5 embutido no `.predict()` não tem
 significado especial para esta aplicação. Comparamos, via curva
 precision-recall no teste 2025, o limiar padrão com o limiar que maximiza
-F1 e com o limiar mais preciso que ainda garante recall ≥ 80% - ver
+F1 e com o limiar mais preciso que ainda garante recall ≥ 80% -- ver
 `src/evaluation/evaluate.py::calibrar_limiar_decisao` e
 `reports/municipal_metas_calibracao_limiar.csv`:
 
@@ -289,7 +301,7 @@ gestor escolher o trade-off.
 Split: só ano de 2025 (2.222.792 linhas), 70/30 aleatório estratificado por
 `TARGET` — treino com 1.555.954 linhas, teste com 666.838. **Treino e
 métricas usam `sample_weight=VL_PESO_ALUNO_LP`** (peso amostral oficial do
-INEP - ver "Insights encontrados" e branch `feature/correcao-peso-amostral`);
+INEP -- ver "Insights encontrados" e branch `feature/correcao-peso-amostral`);
 com o peso aplicado, 58,9% dos alunos ponderados do teste são alfabetizados
 (era 58,6% sem peso, praticamente igual porque o peso varia pouco entre
 alunos avaliados dentro do mesmo ano).
@@ -304,12 +316,12 @@ alunos avaliados dentro do mesmo ano).
 *(baseline de "sempre prever a classe majoritária", ponderado, no teste =
 0,5886 de acurácia — ver `reports/baseline_comparison.csv`. O RandomForest
 tunado (linha em negrito) usa os hiperparâmetros otimizados via
-`RandomizedSearchCV` - ver "Escolha do algoritmo"; é uma melhora real
+`RandomizedSearchCV` -- ver "Escolha do algoritmo"; é uma melhora real
 sobre a versão anterior sem tuning, AUC 0,6576 vs. 0,6383.)*
 
-![Comparação de baselines - modelo de aluno](images/baseline_comparison_aluno.png)
+![Comparação de baselines -- modelo de aluno](images/baseline_comparison_aluno.png)
 
-**Quebra por região** (melhor modelo - RandomForest tunado + enriquecimento,
+**Quebra por região** (melhor modelo -- RandomForest tunado + enriquecimento,
 `reports/baseline_metricas_por_regiao.csv`):
 
 | Região | Taxa real de alfabetização (ponderada) | Acurácia | Precisão | Recall |
@@ -346,12 +358,16 @@ já resolvido em boa parte pelo tuning, a infraestrutura escolar (mesmo nível
 municipal das outras 3 features) não acrescenta muito mais. Ver
 `reports/baseline_metricas_por_uf_com_infraestrutura.csv`.
 
-**Matriz de confusão** (mesmo cenário - RandomForest tunado + enriquecimento, 
+**Matriz de confusão** (mesmo cenário -- RandomForest tunado + enriquecimento,
 pesada por `VL_PESO_ALUNO_LP`, `reports/baseline_confusion_matrix.csv`):
-dos alunos ponderados realmente não alfabetizados, 195.665 (26,3% do total
-do teste) foram previstos como alfabetizados - é o principal erro do
-modelo (falsos positivos), o que explica a precisão moderada (0,6461) na
-classe "alfabetizado" mesmo com recall alto (0,8162) nessa mesma classe.
+dos alunos ponderados realmente não alfabetizados, um peso amostral
+equivalente a 195.665 (26,3%) foi previsto como alfabetizado -- é o
+principal erro do modelo (falsos positivos), o que explica a precisão
+moderada (0,6461) na classe "alfabetizado" mesmo com recall alto (0,8162)
+nessa mesma classe. *(O percentual usa como denominador o total ponderado
+da matriz -- 743.664,84, soma das 4 células -- não a contagem de 666.838
+linhas do teste: como `VL_PESO_ALUNO_LP` representa mais de um aluno real
+por linha registrada, o total ponderado é maior que a contagem de linhas.)*
 
 ![Matriz de confusão -- modelo de aluno](images/matriz_confusao_aluno.png)
 
@@ -393,25 +409,26 @@ split 2025, treinado com `sample_weight`:
   mais negativo entre as 5 regiões; `Centro-Oeste` é o mais positivo
   (+0,031). Ver `reports/shap_efeito_regiao.csv`.
 - **A degeneração por UF caiu de 67% pra 30% com o tuning** (ver "Métricas
-  de avaliação") - ao contrário do que concluímos inicialmente, o problema
+  de avaliação") -- ao contrário do que concluímos inicialmente, o problema
   *não* era puramente estrutural: um espaço de busca de hiperparâmetros que
   nenhum dos testes manuais anteriores tinha coberto (`max_depth` sem limite
-  combinado com `min_samples_leaf` alto) destravou boa parte da capacidade
-  do modelo de diferenciar alunos dentro do mesmo estado. As 8 UFs que continuam
-  degeneradas são as de maior alfabetização real (onde prever "sim" quase sempre
-  já é quase correto), não mais um sintoma generalizado.
+  combinado com `min_samples_leaf` alto) ampliou bastante a capacidade do
+  modelo de diferenciar perfis de alunos dentro do mesmo estado. As 8 UFs
+  que continuam degeneradas são as de maior alfabetização real, onde prever
+  "alfabetizado" já é uma aproximação razoável por construção -- não mais
+  um sintoma generalizado.
 
 ## Insights encontrados
 
 - **Peso amostral (achado desta revisão, corrige todos os percentuais abaixo)**: o INEP pondera o Indicador Criança Alfabetizada oficial pelo peso por aluno `VL_PESO_ALUNO_LP` (presente na `TS_ALUNO`, mas não aplicado nas versões anteriores deste README). Contagem simples de linhas mostra 54,0% de alfabetizados; ponderado corretamente, **61,1%** — validado cruzando `TS_ESTADO` (rede Total: Estadual+Municipal) com a nota técnica oficial do INEP/Todos Pela Educação (ICA 2025 = 66% nacional): bate quase exato nos 27 estados, incluindo Santa Catarina (ver nota abaixo sobre o valor revisado). Ver `notebooks/01_EDA_Alfabetizacao.ipynb`, Seção 2.
 - **Santa Catarina, validação extra**: a nota técnica de março/2026 (INEP/Todos Pela Educação) reportava SC em 59% para 2025 — bem abaixo dos 63,18% que calculamos (tanto ponderando `TS_ALUNO` nós mesmos quanto lendo direto o `PC_ALUNO_ALFABETIZADO` da `TS_ESTADO`). Reportagens públicas posteriores (SED/SC, 27/03/2026) indicam que os 59% eram **preliminares** e foram **revisados para ~63,2%** após nova análise da base pelo Cebraspe, incorporando uma atualização do Censo Escolar disponibilizada pelo INEP em 09/03/2026 — e relatórios técnicos do INEP publicados depois já trazem SC em 63%. Ou seja, **nosso número bate com o valor revisado, não com o preliminar** — reforça que a ponderação está correta, e que a base de microdados que baixamos já refletia dados mais atualizados que a nota técnica inicial.
-- **Target balanceado**: 61,1% alfabetizados vs. 38,9% não alfabetizados (ponderado) — não requer balanceamento artificial (SMOTE/undersampling).
+- **Distribuição do target**: 61,1% alfabetizados vs. 38,9% não alfabetizados (ponderado) -- desbalanceamento moderado, sem necessidade de técnicas artificiais de balanceamento (SMOTE/undersampling).
 - **Desigualdade regional**: ~12 pontos percentuais de diferença entre a melhor região (Centro-Oeste, 66,0%) e a pior (Norte, 53,9%) -- ponderado, rede pública. Por UF a disparidade é bem maior: 44pp entre Ceará (84,5%, isolado no topo) e Sergipe (40,1%, pior do país) -- CE e SE estão na mesma região (Nordeste), que mascara essa disparidade quando agregada. Ver Seção 5 da EDA.
 - **Rede**: base majoritariamente municipal (87%); amostra da rede privada é irrisória (25 alunos) e não deve ser usada para conclusões.
 - **Data leakage crítico identificado na EDA**: `TARGET` é 100% determinístico a partir de `VL_PROFICIENCIA_LP >= 743` (sem exceções) e de flags de participação na prova. Essas variáveis (e derivadas) foram excluídas do conjunto de features de modelagem — ver `notebooks/01_EDA_Alfabetizacao.ipynb`, seção 7.
 - Agregados municipais/estaduais (`PC_ALUNO_ALFABETIZADO*`, `VL_MEDIA_LP*`) têm vazamento parcial (incluem o próprio aluno no cálculo) e devem ser usados com cautela ou recalculados como *leave-one-out*.
 - **`DESEMPENHO_RELATIVO` também é leakage** (derivado de `DIF_MEDIA_ESTADO`, que vem de `VL_PROFICIENCIA_LP`) e não estava na lista original da EDA — encontrado ao formalizar a seleção de features em código (`src/modeling/features.py`).
-- **`ID_ALUNO` e `ID_ESCOLA` não são identificadores persistentes entre anos**: as faixas numéricas se repetem quase idênticas em 2023/2024/2025 e, dos "mesmos" códigos que aparecem em anos diferentes, praticamente 0% correspondem à mesma escola/mesmo município — são IDs re-sorteados a cada ano (o dicionário oficial do INEP confirma: `ID_ESCOLA` é "máscara do código da escola, códigos fictícios"), não registros nacionais estáveis. Isso fecha a porta pra usar `ID_ESCOLA` via encoding como fonte de sinal individual (`CO_ENTIDADE` do Censo Escolar, que é o código real, também não bate: 0% de correspondência testada).
+- **`ID_ALUNO` e `ID_ESCOLA` não são identificadores persistentes entre anos**: as faixas numéricas se repetem quase idênticas em 2023/2024/2025 e, dos "mesmos" códigos que aparecem em anos diferentes, praticamente 0% correspondem à mesma escola/mesmo município — são IDs re-sorteados a cada ano (o dicionário oficial do INEP confirma: `ID_ESCOLA` é "máscara do código da escola, códigos fictícios"), não registros nacionais estáveis. Isso fecha a porta pra usar `ID_ESCOLA` via encoding como fonte de sinal individual (`CO_ENTIDADE` do Censo Escolar, que é o código real, também não corresponde: 0% de correspondência testada).
 - **Nenhuma feature disponível varia por aluno**: com as 7 features atuais (`REGIAO`, `SG_UF`, `TP_DEPENDENCIA` + 3 socioeconômicas por município), os 2.222.792 alunos de 2025 colapsam em só ~6.500 combinações únicas de valores — em média, **~340 alunos compartilham exatamente a mesma linha de entrada e, por construção, a mesma probabilidade prevista**. Isso continua verdade mesmo depois do tuning (ver abaixo) -- o que melhorou foi a capacidade do modelo de diferenciar as ~6.500 combinações *entre si*, não de diferenciar os ~340 alunos dentro de uma mesma combinação.
 - **Sem o enriquecimento externo, o modelo mal supera prever a classe majoritária** (`REGIAO`/`SG_UF`/`TP_DEPENDENCIA` sozinhos: acurácia 0,595-0,598 vs. baseline ponderado de 0,589) — quase todo o sinal individual forte foi removido como leakage, então o que resta é fraco por natureza.
 - **Tuning de hiperparâmetros reduziu a degeneração de recall por UF em ~2/3** (de 67% pra 30% das UFs, `src/modeling/run_baseline_tuning.py`) — depois de 4 tentativas anteriores (split, `max_depth` limitado, infraestrutura escolar, peso amostral) não terem resolvido, uma busca sistemática (`RandomizedSearchCV`) achou uma combinação (`max_depth` sem limite + `min_samples_leaf` alto) que nenhum teste manual tinha coberto. **Correção da conclusão de versões anteriores deste README**: o problema não era puramente estrutural/insolúvel — parte dele era, sim, uma escolha de hiperparâmetro subótima. Ver "Interpretação dos resultados".
@@ -423,7 +440,7 @@ split 2025, treinado com `sample_weight`:
 - Amostra da rede privada é pequena demais para generalizar.
 - Reconstrução da camada Gold feita localmente (fora do Databricks/AWS original da Fase 2) — ver seção "Reconstrução da camada Gold" abaixo para detalhes e possíveis pequenas diferenças de metodologia.
 - Renda (Censo 2022) e INSE (SAEB 2023) são fotos únicas, repetidas nos 3 anos do painel (2023-2025) — ver "Enriquecimento externo por município" abaixo.
-- **Defasagem temporal em parte do enriquecimento externo**: o CadÚnico usado reflete a extração mais recente disponível no momento da coleta (agosto/2026) — portanto **posterior** aos anos de avaliação modelados (2023-2025) — e o Censo Escolar usado é de 2025. Isso é adequado para uma leitura **explicativa/diagnóstica** (associação entre contexto socioeconômico e um resultado já observado), mas significa que o modelo, tal como construído nesta versão, não deve ser lido como estritamente prospectivo (ver "Contexto do problema"). Um uso operacional real — aplicado antes de uma avaliação futura — dependeria de alimentar o mesmo pipeline com a extração de CadÚnico/Censo Escolar vigente **naquele momento**, não com dados coletados depois do fato. A arquitetura (features, pipeline, modelo) já suporta essa substituição sem mudança de código; falta apenas a atualização periódica da fonte.
+- **Defasagem temporal em parte do enriquecimento externo**: o CadÚnico usado reflete a extração mais recente disponível no momento da coleta (agosto/2026) — portanto **posterior** aos anos de avaliação modelados (2023-2025) — e o Censo Escolar usado é de 2025. Isso não é vazamento de dados (*data leakage*): não existe canal causal entre o resultado de alfabetização de um município em 2025 e a taxa de pobreza registrada no CadÚnico em 2026 -- são variáveis independentes. É, sim, uma defasagem de **proxy temporal**, e o argumento que sustenta seu uso é a **baixa volatilidade estrutural** da variável: a composição de pobreza de um município não muda de forma abrupta de um ano para o outro (salvo choque de política pública em larga escala), então o que importa é a proximidade temporal do dado, não sua direção (antes ou depois do ano-alvo). É exatamente a mesma lógica já aplicada, sem estranhamento, à Renda (Censo 2022) e ao INSE (2023) -- ambos também são "fotos únicas" aplicadas a um intervalo de anos, só que anteriores ao período modelado, o que intuitivamente parece mais confortável; o CadÚnico só inverteu a direção, não a natureza da escolha metodológica. A extração usada é, além disso, a única disponível: a ferramenta pública (VIS Data 3) expõe apenas o retrato mais recente no momento da consulta, sem série histórica navegável -- não foi escolha por conveniência, foi o único canal de acesso público. Dado isso, o modelo, tal como construído nesta versão, é adequado para uma leitura **explicativa/diagnóstica** (associação entre contexto socioeconômico e um resultado já observado), mas não deve ser lido como estritamente prospectivo (ver "Contexto do problema"). Um uso operacional real — aplicado antes de uma avaliação futura — dependeria de alimentar o mesmo pipeline com a extração de CadÚnico/Censo Escolar vigente **naquele momento**, não com dados coletados depois do fato. A arquitetura (features, pipeline, modelo) já suporta essa substituição sem mudança de código; falta apenas a atualização periódica da fonte.
 - **Degeneração de recall por UF (achado central da modelagem, parcialmente resolvida via tuning)**: das 5 correções testadas (split aleatório em vez de temporal, reduzir `max_depth`, infraestrutura escolar, peso amostral, e por fim `RandomizedSearchCV` -- ver "Métricas de avaliação"), as 4 primeiras não resolveram (degeneração oscilando entre 44% e 67% das UFs), mas o tuning sistemático de hiperparâmetros reduziu pra 30% (8 de 27, concentradas nos estados de maior alfabetização real, onde o erro é menos grave). Ainda assim, **dentro de cada combinação de `REGIAO`/`SG_UF`/`TP_DEPENDENCIA`+socioeconômico (~340 alunos em média), o modelo continua prevendo a mesma probabilidade pra todos** — não há como diferenciar alunos individuais dentro do mesmo grupo com as features disponíveis. **Este modelo não deve ser usado para decisões de política pública sobre alunos individuais** (ver "Aplicação prática" e "Evoluções futuras"), mas está bem mais utilizável a nível de grupo/perfil do que a versão anterior sem tuning.
 - **Modelagem restrita ao ano de 2025** (split aleatório 70/30, ver `src/modeling/split.py`): descartamos o split temporal (2023-2024 → 2025) usado numa primeira versão porque a taxa real de alfabetização mudava entre os recortes, misturando "o modelo generaliza mal" com "o mundo mudou entre os anos". O trade-off é não testar a capacidade do modelo de prever um ano futuro nunca visto — só validamos generalização dentro do mesmo ano.
 - **`ID_ESCOLA` não pode ser usado para trazer sinal por escola**: é uma máscara re-sorteada a cada ano pelo INEP (não é o `CO_ENTIDADE` real usado no Censo Escolar, e nem é estável entre 2023-2025) — fecha a porta pra qualquer enriquecimento por escola individual com os dados públicos disponíveis.
@@ -477,59 +494,55 @@ qualquer uso real: em 8 dos 27 estados (DF, MA, MT, PR, ES, GO, PI, CE --
 justamente os de maior alfabetização) o recall continua ≈100%, então nesses
 o modelo não discrimina aluno nenhum, só reproduz a média local (o que,
 nesses casos específicos, tende a estar próximo do certo na maioria das
-vezes). Nas outras 19 UFs, o modelo já diferencia alunos de forma real
-(recall entre 24% e 98%) — mas **mesmo aí, dentro de cada combinação de
-território + perfil socioeconômico (~340 alunos em média), a previsão é
-idêntica pra todos** (ver "Limitações do projeto"), então não serve pra
-apontar *qual* aluno específico está em risco, só pra estimar a taxa
-esperada de um perfil/região. Uso recomendado: cruzar
+vezes). Nas outras 19 UFs, o modelo apresenta maior diferenciação entre
+perfis de alunos (recall entre 24% e 98%) — mas **mesmo aí, dentro de cada
+combinação de território + perfil socioeconômico (~340 alunos em média), a
+previsão é idêntica pra todos** (ver "Limitações do projeto"), então não
+serve pra apontar *qual* aluno específico está em risco, só pra estimar a
+taxa esperada de um perfil/região. Uso recomendado: cruzar
 `PC_FAMILIAS_POBREZA`/`MEDIA_INSE`/`RENDA_PER_CAPITA_MEDIA` por município
 pra priorizar visitas técnicas ou repasse de material, sempre avaliando as
-previsões segmentadas por UF -- a região é granularidade grossa demais até
-pra diagnosticar o problema (ver EDA, Seção 5). Nenhum dos dois modelos de
-aluno (com ou sem tuning) resolve decisão sobre *aluno individual* — pra
-isso, o modelo **municipal** (pergunta 4 da estratégia) é o mais indicado,
-já que sua granularidade de feature é genuinamente melhor (ainda que a
-nível de município, não de aluno).
+previsões segmentadas por UF -- a análise por região tende a ocultar
+heterogeneidade importante entre UFs (ver EDA, Seção 5).
+
+Nenhum dos dois modelos resolve decisão sobre *aluno individual* -- nem o
+de aluno (granularidade insuficiente nas features, ver acima), nem o
+municipal (opera em outra unidade de análise). Para decisões de
+priorização territorial, o modelo **municipal** (pergunta 4 da estratégia)
+é o mais indicado, por operar na mesma granularidade das perguntas de
+política pública e usar variáveis que efetivamente variam entre municípios.
 
 ## Possíveis evoluções futuras
 
-- **Reduzir ainda mais a degeneração residual por UF** (30%, 8 UFs, ver
-  "Métricas de avaliação"). Histórico: split aleatório, infraestrutura
-  escolar e peso amostral, testados isoladamente com `max_depth` limitado,
-  não resolveram (44%-67% degeneração); só quando o `RandomizedSearchCV`
-  liberou `max_depth` (sem limite) o problema caiu bastante. Como as 8 UFs
-  restantes são justamente as de maior alfabetização real, os caminhos mais
-  promissores agora são: calibração do limiar de decisão por UF (em vez do
-  0,5 fixo, que penaliza estados com base rate muito alta/baixa) ou testar
-  `class_weight="balanced"` combinado com os hiperparâmetros já tunados.
-- [x] ~~Otimizar hiperparâmetros do modelo de aluno via busca sistemática~~
+### Já realizadas
+
+- [x] **Otimizar hiperparâmetros do modelo de aluno via busca sistemática**
   — feito em `src/modeling/run_baseline_tuning.py`
   (`RandomizedSearchCV` + CV): `max_depth=None` + `min_samples_leaf=98`
   reduziu a degeneração por UF de 67% pra 30% e subiu o AUC de 0,638 pra
   0,658 — corrige a conclusão de que o problema era puramente estrutural
   (ver "Interpretação dos resultados" e "Insights encontrados").
-- [x] ~~Re-treinar os modelos com `sample_weight=VL_PESO_ALUNO_LP`~~ —
+- [x] **Re-treinar os modelos com `sample_weight=VL_PESO_ALUNO_LP`** —
   feito na branch `feature/sample-weight-modelo-aluno`: métricas gerais
   quase não mudam isoladamente (AUC 0,638 vs. 0,640 sem peso), mas o
   `sample_weight` foi mantido e combinado com o tuning acima no modelo
   final — ver "Métricas de avaliação".
-- [x] ~~Revisitar a EDA trazendo a desigualdade regional/por UF excluindo
-  a rede privada~~ — feito em `notebooks/01_EDA_Alfabetizacao.ipynb`,
+- [x] **Revisitar a EDA trazendo a desigualdade regional/por UF excluindo
+  a rede privada** — feito em `notebooks/01_EDA_Alfabetizacao.ipynb`,
   Seção 5 (branch `feature/eda-desigualdade-regional-sem-privada`): achado
   de disparidade por UF bem maior que por região (44pp vs. ~12pp,
   ponderado -- ver "Insights encontrados") foi o que motivou adicionar a
   quebra por UF nesta seção.
-- [x] ~~Testar `ID_ESCOLA` via encoding específico~~ — testado e
+- [x] **Testar `ID_ESCOLA` via encoding específico** — testado e
   descartado: `ID_ESCOLA` é uma máscara re-sorteada a cada ano pelo INEP
   (não corresponde a uma escola real estável), então não carrega
   informação de treino (2025) pra nenhum outro ano, e mesmo dentro de
   2025 não existe um `CO_ENTIDADE` real pra cruzar com o Censo Escolar.
-- [x] ~~Agregar infraestrutura escolar (Censo Escolar) por município~~ —
+- [x] **Agregar infraestrutura escolar (Censo Escolar) por município** —
   testado (`PC_ESCOLAS_BIBLIOTECA`, `PC_ESCOLAS_LAB_INFORMATICA`,
   `PC_ESCOLAS_INTERNET_ALUNOS`) e o efeito foi nulo/levemente negativo —
   ver "Métricas de avaliação".
-- [x] ~~Obter acesso ao Atlas do Desenvolvimento Humano (IDHM)~~ -- o Atlas
+- [x] **Obter acesso ao Atlas do Desenvolvimento Humano (IDHM)** -- o Atlas
   Brasil voltou a ficar acessível e foi checado, mas o IDHM (e seus três
   componentes -- Renda/Longevidade/Educação) não foi atualizado desde o
   Censo 2010: não existe versão calculada com o Censo 2022. Ou seja, o
@@ -537,24 +550,36 @@ nível de município, não de aluno).
   mais recente já é mais antigo que o que usamos hoje" -- CadÚnico/Censo
   Demográfico 2022/INSE/Censo Escolar (ver "Enriquecimento externo por
   município") continuam sendo estritamente melhores como substituto.
-  Mapeamos outras categorias do Atlas potencialmente úteis e mais recentes
-  que o IDHM (IDEB por município, analfabetismo adulto via PNAD/Censo,
-  indicadores de vulnerabilidade infantil) -- não incorporadas nesta
-  versão por restrição de prazo, candidatas a uma evolução futura.
-- [x] ~~Testar XGBoost no modelo municipal~~ -- testado e descartado (ver
+- [x] **Testar XGBoost no modelo municipal** -- testado e descartado (ver
   "Escolha do algoritmo"): mesma CV do RandomForest (0,773), mas AUC de
   teste pior (0,613 vs. 0,663) -- generaliza menos com o volume pequeno de
-  dados (~5.400 municípios de treino). Fica em aberto testar LightGBM ou
-  XGBoost com regularização mais forte (`reg_alpha`/`reg_lambda`,
-  `early_stopping_rounds`) e no modelo de **aluno**, que tem volume de
-  dados bem maior (1,56 milhão de linhas de treino) e pode favorecer mais
-  o boosting do que o municipal.
-- [x] ~~Calibrar o limiar de decisão do modelo municipal~~ -- feito (ver
+  dados (~5.400 municípios de treino).
+- [x] **Calibrar o limiar de decisão do modelo municipal** -- feito (ver
   "Escolha do algoritmo"): recall na classe de risco sobe de 64% pra até
-  80% trocando só o corte de decisão, sem retreinar. Falta fazer o mesmo
-  exercício para o modelo de **aluno**, especialmente por UF (limiar
-  específico por estado em vez de um corte único de 0,5, ver bullet acima
-  sobre a degeneração residual).
+  80% trocando só o corte de decisão, sem retreinar.
+
+### Próximos passos
+
+- **Reduzir ainda mais a degeneração residual por UF no modelo de aluno**
+  (30%, 8 UFs, ver "Métricas de avaliação"). Histórico: split aleatório,
+  infraestrutura escolar e peso amostral, testados isoladamente com
+  `max_depth` limitado, não resolveram (44%-67% degeneração); só quando o
+  `RandomizedSearchCV` liberou `max_depth` (sem limite) o problema caiu
+  bastante. Como as 8 UFs restantes são justamente as de maior
+  alfabetização real, os caminhos mais promissores agora são: calibração
+  do limiar de decisão por UF (em vez do 0,5 fixo, que penaliza estados
+  com base rate muito alta/baixa -- mesmo exercício já feito no modelo
+  municipal, ver "Escolha do algoritmo") ou testar `class_weight="balanced"`
+  combinado com os hiperparâmetros já tunados.
+- **Testar LightGBM, ou XGBoost com regularização mais forte** (`reg_alpha`/
+  `reg_lambda`, `early_stopping_rounds`) **no modelo de aluno** -- o volume
+  de dados é bem maior que o municipal (1,56 milhão de linhas de treino),
+  o que pode favorecer o boosting de um jeito que não se confirmou no
+  municipal (~5.400 municípios de treino, ver "Escolha do algoritmo").
+- **Incorporar categorias do Atlas do Desenvolvimento Humano mapeadas mas
+  não usadas nesta versão** (por restrição de prazo): IDEB por município,
+  analfabetismo adulto via PNAD/Censo, indicadores de vulnerabilidade
+  infantil -- ver "Enriquecimento externo por município".
 
 ## Como rodar
 
@@ -706,18 +731,22 @@ restante do projeto usa o código completo (7 dígitos, ex.: `1200013`). A
 pipeline (`_build_dim_municipio_socioeconomico` em `src/preprocessing/gold.py`)
 já faz essa conversão (`CO_MUNICIPIO // 10`) antes do merge.
 
-**Resultado (das 3 primeiras fontes, avaliadas juntas na Seção 8 da EDA):**
+**Resultado (das quatro fontes de enriquecimento, as três primeiras --
+pobreza, renda e INSE -- avaliadas juntas na Seção 8 da EDA; a
+infraestrutura escolar entrou depois, ver "Métricas de avaliação"):**
 `PC_FAMILIAS_POBREZA`, `RENDA_PER_CAPITA_MEDIA` e `MEDIA_INSE` correlacionam
-na direção esperada com a taxa de alfabetização
-a nível de **município** (|r| entre 0,18 e 0,29), mas a correlação cai bastante
-a nível de **aluno** — a granularidade real de treino da `FT_MACHINE_LEARNING`
-(|r| entre 0,006 e 0,073, praticamente ruído para renda). Isso é esperado -- a agregação por município tende a produzir associações
+na direção esperada com a taxa de alfabetização a nível de **município**
+(|r| entre 0,18 e 0,29), mas a correlação cai bastante a nível de
+**aluno** -- a granularidade real de treino da `FT_MACHINE_LEARNING` (|r|
+entre 0,006 e 0,073, praticamente ruído para renda).
+
+Isso é esperado -- a agregação por município tende a produzir associações
 mais fortes do que as observadas em nível individual, por efeito de
 composição e redução de ruído idiossincrático (fenômeno próximo à "falácia
 ecológica" na literatura de ciências sociais) -- e não significa que as
-features sejam inúteis num modelo
-multivariado — a decisão de manter ou descartar cada uma fica para a etapa
-de modelagem (importância de feature / SHAP), não para a correlação isolada.
+features sejam inúteis num modelo multivariado: a decisão de manter ou
+descartar cada uma fica para a etapa de modelagem (importância de feature
+/ SHAP), não para a correlação isolada.
 
 **Limitação:** renda (Censo Demográfico 2022), INSE (SAEB 2023) e
 infraestrutura escolar (Censo Escolar 2025) são **fotos únicas** — o mesmo
